@@ -1,0 +1,139 @@
+(ns riffle.data.utils
+  (:require
+    [primitive-math :as p]
+    [clojure.java.io :as io])
+  (:import
+    [java.util
+     Collection
+     PriorityQueue]
+    [java.lang.reflect
+     Array]
+    [java.nio
+     ByteBuffer]
+    [java.nio.channels
+     FileChannel$MapMode]
+    [java.io
+     File
+     RandomAccessFile
+     DataOutputStream
+     DataInputStream]))
+
+;;;
+
+(defn ^File temp-file []
+  (File/createTempFile "riffle" ""))
+
+(defn transient-file []
+  (doto (temp-file) .deleteOnExit))
+
+;; because the contents are "undefined" according to Java
+(defn reset-file [^RandomAccessFile f]
+  (.seek f 0)
+  (let [ary (byte-array 1024)
+        chunks (/ (.length f) (count ary))
+        remainder (rem (.length f) (count ary))]
+    (dotimes [_ chunks]
+      (.write f ary))
+    (.write f ary 0 remainder))
+  (.seek f 0))
+
+(defn mapped-buffer [^File f mode offset length]
+  (let [raf (RandomAccessFile. (io/file f) ^String mode)]
+    (try
+      (let [fc (.getChannel raf)]
+        (try
+          (.map fc
+            (case mode
+              "rw" FileChannel$MapMode/READ_WRITE
+              "r" FileChannel$MapMode/READ_ONLY)
+            (or offset 0)
+            (or length (.length raf)))
+          (finally
+            (.close fc))))
+      (finally
+        (.close raf)))))
+
+;;;;
+
+;; adapted from code I wrote for the late, lamented Skuld
+
+(deftype SeqContainer [cmp-fn ^long idx s]
+  Comparable
+  (equals [_ x]
+    (and
+      (instance? SeqContainer x)
+      (p/== (.idx ^SeqContainer x) idx)
+      (identical? (.s ^SeqContainer x) s)))
+  (compareTo [_ x]
+    (let [^SeqContainer x x
+          cmp (p/long (cmp-fn (first s) (first (.s x))))]
+      (if (p/zero? cmp)
+        (compare idx (.idx x))
+        cmp))))
+
+(defn- merge-sort-by- [cmp-fn ^PriorityQueue heap]
+  (lazy-seq
+    (loop [chunk-idx 0, buf (chunk-buffer 32)]
+      (if (.isEmpty heap)
+        (chunk-cons (chunk buf) nil)
+        (let [^SeqContainer container (.poll heap)]
+          (chunk-append buf (first (.s container)))
+          (when-let [s' (seq (rest (.s container)))]
+            (.offer heap (SeqContainer. cmp-fn (.idx container) s')))
+          (let [chunk-idx' (unchecked-inc chunk-idx)]
+            (if (< chunk-idx' 32)
+              (recur chunk-idx' buf)
+              (chunk-cons
+                (chunk buf)
+                (merge-sort-by- cmp-fn heap)))))))))
+
+(defn merge-sort-by
+  "Like sorted-interleave, but takes a specific keyfn, like sort-by."
+  [cmp-fn & seqs]
+  (if (= 1 (count seqs))
+    (first seqs)
+    (merge-sort-by-
+      cmp-fn
+      (PriorityQueue.
+        ^Collection
+        (map #(SeqContainer. cmp-fn %1 %2) (range) (remove empty? seqs))))))
+
+;;;
+
+(defn write-prefixed-array [x ^bytes ary]
+  (let [len (p/uint->int (Array/getLength ary))]
+    (cond
+
+      (instance? RandomAccessFile x)
+      (let [^RandomAccessFile x x]
+        (.writeInt x len)
+        (.write x ary))
+
+      (instance? DataOutputStream x)
+      (let [^DataOutputStream x x]
+        (.writeInt x len)
+        (.write x ary 0 len))
+
+      :else
+      (throw (IllegalArgumentException.)))))
+
+(defn read-prefixed-array [x]
+  (cond
+
+    (instance? RandomAccessFile x)
+    (let [^RandomAccessFile x x
+          len (p/int->uint (.readInt x))
+          ary (byte-array len)]
+      (.read x ary)
+      ary)
+
+
+    (instance? DataInputStream x)
+    (let [^DataInputStream x x
+          len (p/int->uint (.readInt x))
+          ary (byte-array len)]
+      (.read x ary 0 len)
+      ary)
+
+    :else
+    (throw (IllegalArgumentException.))))
