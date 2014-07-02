@@ -7,6 +7,8 @@
     [riffle.data.riffle :as r]
     [riffle.data.block :as b])
   (:import
+    [java.io
+     InputStream]
     [riffle.data.riffle
      Riffle]))
 
@@ -30,3 +32,6 @@
     r/block-offsets
     (map (partial r/read-block r))
     (mapcat b/block->kvs)))
+
+(defn stream-entries [^InputStream is]
+  (r/entries is))

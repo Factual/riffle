@@ -93,13 +93,13 @@
                     (map
                       (fn [f]
                         (if (r/riffle? f)
-                          (r/entries f)
+                          (r/stream-entries (bs/to-input-stream f))
                           (->> (io/file f)
                             (parse-tsv delimiter base64?)
                             (s/sort-kvs comparator 1e7)))))
                     (apply u/merge-sort-by comparator))]
           (w/write-riffle kvs (out)
-            {;;:sorted? true
+            {:sorted? true
              :compressor compressor
              :block-size block-size}))
 
@@ -112,8 +112,8 @@
         (and (not encode?) files)
         (let [f (comp bs/to-string decoder)]
           (doseq [[k v] (->> files
-                          (map r/riffle)
-                          (map r/entries)
+                          (map bs/to-input-stream)
+                          (map r/stream-entries)
                           (apply u/merge-sort-by comparator))]
             (.write *out* ^String (f k))
             (when-not keys?

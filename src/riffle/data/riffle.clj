@@ -22,6 +22,8 @@
     [java.io
      IOException
      File
+     InputStream
+     DataInputStream
      RandomAccessFile
      OutputStream
      FileOutputStream
@@ -58,12 +60,11 @@
                  (b/kvs->blocks hash-fn block-size))
         slots (p/long (Math/ceil (/ @count t/load-factor)))]
 
-    (with-open [table (RandomAccessFile. table-file "rw")]
-      (doto table
-        (.setLength (p/* t/slot-length slots))
-        u/reset-file))
-
-    (let [table (u/mapped-buffer table-file "rw"  nil nil)]
+    (let [table-file (u/transient-file)
+          table (-> table-file
+                  bs/to-output-stream
+                  (BufferedOutputStream. 1e5)
+                  DataOutputStream.)]
       (with-open [os (-> block-file
                        FileOutputStream.
                        (BufferedOutputStream. (long 1e5))
@@ -77,8 +78,14 @@
             {:count @count
              :shared-hash hash
              :hash-mask mask
-             :table-file table-file
-             :block-file block-file}
+             :table-file (let [_ (.close table)
+                               t (t/build-hash-table table-file)]
+                           (.delete table-file)
+                           t)
+             :block-file (do
+                           (.writeInt os 0)
+                           (.writeInt os 0)
+                           block-file)}
             (let [{:keys [hash->offset bytes] :as block} (first s)
                   hash->index (zipmap (keys hash->offset) (range))
                   bytes (bs/to-byte-array (compress-fn bytes))
@@ -91,7 +98,7 @@
                                 [hash mask]
                                 (->> hash->index keys (map #(p/int->uint %))))]
               (doseq [[hash idx] hash->index]
-                (t/write-entry table 0 slots [hash pos idx]))
+                (t/append-entry table hash pos idx))
               (.writeInt os (p/int (checksum-fn bytes)))
               (u/write-prefixed-array os bytes)
               (recur (rest s) (p/int hash) (p/int mask) (p/+ pos 8 len)))))))))
@@ -103,7 +110,7 @@
 
 (defn write-riffle
   [kvs x {:keys [sorted? compressor hash checksum block-size]}]
-  (let [{:keys [count ^File table-file ^File block-file hash-mask shared-hash]}
+  (let [{:keys [count ^File table-file ^File block-file hash-mask shared-hash] :as parts}
         (kvs->riffle-parts kvs
           {:compress-fn (if (= :none compressor) identity #(bt/compress % compressor))
            :hash-fn #(bt/hash % hash)
@@ -206,8 +213,9 @@
     (.seek raf (p/+ (p/long offset) (.block-offset r)))
     (let [checksum (.readInt raf)
           block (u/read-prefixed-array raf)]
-      (when (p/not== checksum (p/int ((.checksum-fn r) block)))
-        (throw (IOException. "bad checksum")))
+      (let [checksum' (p/int ((.checksum-fn r) block))]
+        (when (p/not== checksum checksum')
+          (throw (IOException. (str "bad checksum, expected " checksum " but got " checksum')))))
       (-> block ((.decompress-fn r)) bs/to-byte-array))))
 
 (defn lookup [^Riffle r ^bytes key ^long hash]
@@ -220,21 +228,35 @@
 
 (defn block-offsets
   ([^Riffle r]
-     (block-offsets r
-       0
-       (- (.length ^File (.file r))
-         (.capacity ^ByteBuffer (.table r))
-         (.block-offset r))))
-  ([^Riffle r ^long offset limit]
-     (when (< offset limit)
-       (lazy-seq
-         (let [^BlockingQueue pool (.file-pool r)
-               ^RandomAccessFile raf (.take pool)]
-           (try
-             (.seek raf (p/+ (.block-offset r) offset))
-             (let [_ (.readInt raf)
-                   len (.readInt raf)
-                   offset' (p/+ offset 8 len)]
-               (cons offset (block-offsets r offset' limit)))
-             (finally
-               (.put pool raf))))))))
+     (block-offsets r 0))
+  ([^Riffle r ^long offset]
+     (lazy-seq
+       (let [^BlockingQueue pool (.file-pool r)
+             ^RandomAccessFile raf (.take pool)]
+         (try
+           (.seek raf (p/+ (.block-offset r) offset))
+           (let [_ (.readInt raf)
+                 len (.readInt raf)
+                 offset' (p/+ offset 8 len)]
+             (when (pos? len)
+               (cons offset (block-offsets r offset'))))
+           (finally
+             (.put pool raf)))))))
+
+(defn entries [^InputStream is]
+  (let [header (h/decode-header is)
+        f (fn this [^DataInputStream is checksum-fn decompress-fn]
+            (lazy-seq
+              (let [checksum (.readInt is)
+                    block (u/read-prefixed-array is)]
+                (when-not (zero? (Array/getLength block))
+                  #_(let [checksum' (p/int (checksum-fn block))]
+                    (when (p/not== checksum checksum')
+                      (throw (IOException. (str "bad checksum, expected " checksum " but got " checksum')))))
+                  (concat
+                    (-> block decompress-fn bs/to-byte-array b/block->kvs)
+                    (this is checksum-fn decompress-fn))))))]
+    (.skip is (- (:blocks-offset header) (:header-length header)))
+    (f (DataInputStream. is)
+      #(bt/hash % (:checksum header))
+      #(bt/decompress % (:compressor header)))))

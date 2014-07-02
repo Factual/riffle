@@ -60,23 +60,25 @@
     (.writeLong os (p/+ hash-table-offset header-length))
     (.toByteArray baos)))
 
+(defn read-rffl [^DataInputStream is]
+  (let [ary (byte-array 4)]
+    (.read is ary)
+    (when-not (= "rffl" (bs/to-string ary))
+      (throw (IOException. "invalid header, not a riffle file")))))
+
 (defn decode-header [x]
   (let [is (DataInputStream. (bs/to-input-stream x))
-        ary (byte-array 4)
-        _ (.read is ary)
-        _ (when-not (= "rffl" (bs/to-string ary))
-            (throw (IOException. "invalid header, not a riffle file")))
+        _  (read-rffl is)
         file-length (.readLong is)
-        [version compress-fn hash-fn checksum-fn] (-> (u/read-prefixed-array is)
-                                                    bs/to-string
-                                                    (str/split #","))
-
+        ary (u/read-prefixed-array is)
+        [version compress-fn hash-fn checksum-fn] (-> ary bs/to-string (str/split #","))
         count (.readLong is)
         shared-hash (p/int->uint (.readInt is))
         hash-mask (p/int->uint (.readInt is))
         blocks-offset (.readLong is)
         hash-table-offset (.readLong is)]
-    {:version version
+    {:header-length (+ 48 (Array/getLength ary))
+     :version version
      :file-length file-length
      :count count
      :compressor (keyword compress-fn)

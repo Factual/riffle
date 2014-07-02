@@ -9,7 +9,8 @@
     [java.lang.reflect
      Array]
     [java.nio
-     ByteBuffer]
+     ByteBuffer
+     MappedByteBuffer]
     [java.nio.channels
      FileChannel$MapMode]
     [java.io
@@ -23,7 +24,7 @@
 (defn ^File temp-file []
   (File/createTempFile "riffle" ""))
 
-(defn transient-file []
+(defn ^File transient-file []
   (doto (temp-file) .deleteOnExit))
 
 ;; because the contents are "undefined" according to Java
@@ -37,7 +38,12 @@
     (.write f ary 0 remainder))
   (.seek f 0))
 
-(defn mapped-buffer [^File f mode offset length]
+(defn resize-file [f length]
+  (with-open [raf (RandomAccessFile. (io/file f) "rw")]
+    (.setLength raf length)
+    (reset-file raf)))
+
+(defn ^MappedByteBuffer mapped-buffer [^File f mode offset length]
   (let [raf (RandomAccessFile. (io/file f) ^String mode)]
     (try
       (let [fc (.getChannel raf)]
