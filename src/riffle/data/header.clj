@@ -64,11 +64,12 @@
   (let [ary (byte-array 4)]
     (.read is ary)
     (when-not (= "rffl" (bs/to-string ary))
+      (prn (bs/to-string ary))
       (throw (IOException. "invalid header, not a riffle file")))))
 
 (defn decode-header [x]
   (let [is (DataInputStream. (bs/to-input-stream x))
-        _  (read-rffl is)
+        _ (read-rffl is)
         file-length (.readLong is)
         ary (u/read-prefixed-array is)
         [version compress-fn hash-fn checksum-fn] (-> ary bs/to-string (str/split #","))

@@ -112,6 +112,7 @@
         (and (not encode?) files)
         (let [f (comp bs/to-string decoder)]
           (doseq [[k v] (->> files
+                          (map io/file)
                           (map bs/to-input-stream)
                           (map r/stream-entries)
                           (apply u/merge-sort-by comparator))]

@@ -5,7 +5,8 @@
     [riffle.hadoop
      RiffleMapper
      RifflePartitioner
-     RiffleOutputFormat]
+     RiffleOutputFormat
+     RiffleComparator]
     [org.apache.hadoop.mapreduce Job Reducer]
     [org.apache.hadoop.fs Path]
     [org.apache.hadoop.conf Configuration]
@@ -27,6 +28,7 @@
               (.setOutputFormatClass RiffleOutputFormat)
               (.setMapperClass RiffleMapper)
               (.setPartitionerClass RifflePartitioner)
+              (.setSortComparatorClass RiffleComparator)
               (.setNumReduceTasks 8))]
 
     (FileInputFormat/addInputPath job (Path. (first args)))

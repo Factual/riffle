@@ -14,6 +14,12 @@ import java.util.List;
 
 public class RiffleOutputFormat extends FileOutputFormat<BytesWritable, BytesWritable> {
 
+    private static String _compressor = "gzip";
+
+    public static void setCompressor(String compressor) {
+        _compressor = compressor;
+    }
+
     public RecordWriter<BytesWritable, BytesWritable> getRecordWriter(TaskAttemptContext context) throws IOException {
         IFn require = Clojure.var("clojure.core", "require");
         require.invoke(Clojure.read("riffle.hadoop.utils"));
@@ -24,7 +30,7 @@ public class RiffleOutputFormat extends FileOutputFormat<BytesWritable, BytesWri
         OutputStream os = fs.create(file);
 
         IFn writer = Clojure.var("riffle.hadoop.utils", "writer");
-        List fns = (List) writer.invoke(os, context);
+        List fns = (List) writer.invoke(os, context, _compressor);
         final IFn write = (IFn) fns.get(0);
         final IFn close = (IFn) fns.get(1);
 

@@ -23,7 +23,7 @@ public class RifflePartitioner extends Partitioner<BytesWritable, BytesWritable>
     }
 
     public int getPartition(BytesWritable key, BytesWritable value, int numPartitions) {
-        Long p = (Long) _partition.invoke(key.getBytes(), _hashFn, numPartitions);
+        Long p = (Long) _partition.invoke(key.copyBytes(), _hashFn, numPartitions);
         System.err.println(p + " " + numPartitions);
         return (int) p.longValue();
     }

@@ -1,9 +1,11 @@
 (ns riffle.hadoop.utils
-  (:refer-clojure :exclude [partition])
+  (:refer-clojure :exclude [partition comparator])
   (:require
     [primitive-math :as p]
+    [byte-streams :as bs]
     [byte-transforms :as bt]
-    [riffle.write :as w])
+    [riffle.write :as w]
+    [riffle.data.riffle :as r])
   (:import
     [java.util.concurrent
      ArrayBlockingQueue]
@@ -18,11 +20,14 @@
   (p/>> (p/int->uint (bt/hash k hash-fn))
     (p/- 32 (p/long (log2 num-partitions)))))
 
-(defn writer [os ^Progressable progressable]
+(defn comparator [hash-fn]
+  (r/key-comparator #(bt/hash % hash-fn)))
+
+(defn writer [os ^Progressable progressable compressor]
   (let [q (ArrayBlockingQueue. 1024)
         s (->> (repeatedly #(.take q))
             (take-while (complement #{::closed})))
-        thunk (future (w/write-riffle s os {}))]
+        thunk (future (w/write-riffle s os {:sorted? true, :compressor compressor}))]
     [(fn [k v] (.put q [k v]))
      (fn [_]
        (.progress progressable)
