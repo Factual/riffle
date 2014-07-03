@@ -23,25 +23,15 @@
 (defn comparator [hash-fn]
   (r/key-comparator #(bt/hash % hash-fn)))
 
-(defn writer [os ^Progressable progressable compressor]
+(defn writer [os _ compressor]
   (let [q (ArrayBlockingQueue. 1024)
         s (->> (repeatedly #(.take q))
             (take-while (complement #{::closed})))
         thunk (future (w/write-riffle s os {:sorted? true, :compressor compressor}))
         cnt (atom 0)]
     [(fn [k v]
-       (.put q [k v])
-       (when (zero? (rem (swap! cnt inc) 1e4))
-         (.progress progressable)))
+       (.put q [k v]))
 
      (fn [_]
-       (.progress progressable)
        (.put q ::closed)
-       (loop []
-         (let [x (deref thunk 10e3 ::timeout)]
-           (if (= ::timeout x)
-             (do
-               (.progress progressable)
-               (recur))
-             x)))
-       (.progress progressable))]))
+       @thunk)]))

@@ -19,7 +19,8 @@
   (:gen-class))
 
 (defn -main [& args]
-  (let [conf (Configuration.)
+  (let [conf (doto (Configuration.)
+               (.setLong "mapred.task.timeout" (* 1000 60 60 6)))
         job (doto (Job. conf "riffle")
               (.setJarByClass RifflePartitioner)
               (.setOutputKeyClass BytesWritable)
