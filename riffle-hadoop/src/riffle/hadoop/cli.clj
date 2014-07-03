@@ -3,10 +3,11 @@
     [clojure.tools.cli :as cli])
   (:import
     [riffle.hadoop
-     RiffleMapper
-     RifflePartitioner
-     RiffleOutputFormat
-     RiffleComparator]
+     RiffleBuildJob
+     RiffleBuildJob$Mapper
+     RiffleBuildJob$Partitioner
+     RiffleBuildJob$OutputFormat
+     RiffleBuildJob$Comparator]
     [org.apache.hadoop.mapreduce Job Reducer]
     [org.apache.hadoop.fs Path]
     [org.apache.hadoop.conf Configuration]
@@ -22,14 +23,14 @@
   (let [conf (doto (Configuration.)
                (.setLong "mapred.task.timeout" (* 1000 60 60 6)))
         job (doto (Job. conf "riffle")
-              (.setJarByClass RifflePartitioner)
+              (.setJarByClass RiffleBuildJob)
               (.setOutputKeyClass BytesWritable)
               (.setOutputValueClass BytesWritable)
               (.setInputFormatClass TextInputFormat)
-              (.setOutputFormatClass RiffleOutputFormat)
-              (.setMapperClass RiffleMapper)
-              (.setPartitionerClass RifflePartitioner)
-              (.setSortComparatorClass RiffleComparator)
+              (.setOutputFormatClass RiffleBuildJob$OutputFormat)
+              (.setMapperClass RiffleBuildJob$Mapper)
+              (.setPartitionerClass RiffleBuildJob$Partitioner)
+              (.setSortComparatorClass RiffleBuildJob$Comparator)
               (.setNumReduceTasks 8))]
 
     (FileInputFormat/addInputPath job (Path. (first args)))
