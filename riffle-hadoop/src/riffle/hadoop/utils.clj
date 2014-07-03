@@ -27,10 +27,21 @@
   (let [q (ArrayBlockingQueue. 1024)
         s (->> (repeatedly #(.take q))
             (take-while (complement #{::closed})))
-        thunk (future (w/write-riffle s os {:sorted? true, :compressor compressor}))]
-    [(fn [k v] (.put q [k v]))
+        thunk (future (w/write-riffle s os {:sorted? true, :compressor compressor}))
+        cnt (atom 0)]
+    [(fn [k v]
+       (.put q [k v])
+       (when (zero? (rem (swap! cnt inc) 1e4))
+         (.progress progressable)))
+
      (fn [_]
        (.progress progressable)
        (.put q ::closed)
-       @thunk
+       (loop []
+         (let [x (deref thunk 10e3 ::timeout)]
+           (if (= ::timeout x)
+             (do
+               (.progress progressable)
+               (recur))
+             x)))
        (.progress progressable))]))
