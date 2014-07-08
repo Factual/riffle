@@ -52,7 +52,7 @@
 
 (defn -main [& args]
   (let [{:keys [options arguments summary errors]}
-        (cli/parse-opts args options)v
+        (cli/parse-opts args options)
 
         {encode? :encode key :get keys? :keys base64? :base64 block-size :block-size compressor :compressor delimiter :delimiter}
         options
