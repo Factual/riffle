@@ -64,7 +64,6 @@
   (let [ary (byte-array 4)]
     (.read is ary)
     (when-not (= "rffl" (bs/to-string ary))
-      (prn (bs/to-string ary))
       (throw (IOException. "invalid header, not a riffle file")))))
 
 (defn decode-header [x]

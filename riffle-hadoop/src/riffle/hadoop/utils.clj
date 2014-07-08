@@ -5,10 +5,14 @@
     [byte-streams :as bs]
     [byte-transforms :as bt]
     [riffle.write :as w]
-    [riffle.data.riffle :as r])
+    [riffle.data.riffle :as r]
+    [riffle.data.utils :as u])
   (:import
     [java.util.concurrent
      ArrayBlockingQueue]
+    [org.apache.hadoop.fs
+     FileSystem
+     Path]
     [org.apache.hadoop.util
      Progressable]))
 
@@ -35,3 +39,10 @@
      (fn [_]
        (.put q ::closed)
        @thunk)]))
+
+(defn merged-kvs [shard num-shards ^FileSystem fs paths]
+  (->> paths
+    (map #(.open fs (Path. %)))
+    (map r/entries)
+    (apply u/merge-sort-by (comparator :murmur32))
+    (filter #(= shard (partition % :murmur32 num-shards)))))

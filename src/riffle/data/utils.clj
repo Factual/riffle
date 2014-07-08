@@ -14,6 +14,7 @@
     [java.nio.channels
      FileChannel$MapMode]
     [java.io
+     IOException
      File
      RandomAccessFile
      DataOutputStream
@@ -138,8 +139,16 @@
     (let [^DataInputStream x x
           len (p/int->uint (.readInt x))
           ary (byte-array len)]
-      (.read x ary 0 len)
-      ary)
+      (if (p/== 0 len)
+        ary
+        (loop [offset 0]
+          (let [len (p/- len offset)
+                len' (.read x ary offset len)]
+            (if (p/< len' 0)
+              (throw (IOException. "EOF on InputStream"))
+              (if (p/== len len')
+                ary
+                (recur (p/+ offset len'))))))))
 
     :else
     (throw (IllegalArgumentException.))))

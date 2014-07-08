@@ -1,28 +1,35 @@
 (ns riffle.hadoop.cli
   (:require
-    [clojure.tools.cli :as cli])
+    [clojure.tools.cli :as cli]
+    [riffle.cli :as riff]
+    [clojure.java.io :as io])
   (:import
     [riffle.hadoop
      RiffleBuildJob
      RiffleBuildJob$Mapper
      RiffleBuildJob$Partitioner
      RiffleBuildJob$OutputFormat
-     RiffleBuildJob$Comparator]
+     RiffleBuildJob$Comparator
+     RiffleMergeJob
+     RiffleMergeJob$PathInputFormat
+     RiffleMergeJob$Partitioner
+     RiffleMergeJob$Reducer]
     [org.apache.hadoop.mapreduce Job Reducer]
-    [org.apache.hadoop.fs Path]
+    [org.apache.hadoop.fs Path FileSystem FileStatus]
     [org.apache.hadoop.conf Configuration]
-    [org.apache.hadoop.io BytesWritable Text LongWritable]
+    [org.apache.hadoop.io BytesWritable Text LongWritable IntWritable]
     [org.apache.hadoop.mapreduce.lib.input
      FileInputFormat
      TextInputFormat]
     [org.apache.hadoop.mapreduce.lib.output
-     FileOutputFormat])
+     FileOutputFormat
+     TextOutputFormat])
   (:gen-class))
 
-(defn -main [& args]
-  (let [conf (doto (Configuration.)
-               (.setLong "mapred.task.timeout" (* 1000 60 60 6)))
-        job (doto (Job. conf "riffle")
+ (defn build-job [^Configuration conf shards srcs dst]
+  (let [job (doto (Job. conf (str "build-riffle-index"
+                               (apply str (interpose "," srcs))
+                               " -> " dst))
               (.setJarByClass RiffleBuildJob)
               (.setOutputKeyClass BytesWritable)
               (.setOutputValueClass BytesWritable)
@@ -31,11 +38,67 @@
               (.setMapperClass RiffleBuildJob$Mapper)
               (.setPartitionerClass RiffleBuildJob$Partitioner)
               (.setSortComparatorClass RiffleBuildJob$Comparator)
-              (.setNumReduceTasks 8))]
+              (.setNumReduceTasks shards)
+              (FileOutputFormat/setOutputPath (Path. dst)))]
+    (doseq [src srcs]
+      (FileInputFormat/addInputPath job (Path. src)))
+    job))
 
-    (FileInputFormat/addInputPath job (Path. (first args)))
-    (FileOutputFormat/setOutputPath job (Path. (second args)))
+(defn files [conf path]
+  (let [fs (FileSystem/get conf)]
+    (->> (.listStatus fs (Path. path))
+      (map #(.getPath ^FileStatus %))
+      (remove #(.startsWith (.getName ^Path %) "_"))
+      (mapv str))))
 
-    (.waitForCompletion job true)
+(defn merge-job [^Configuration conf shards srcs dst]
+  (prn (mapv #(files conf %) srcs))
+  (doto (Job. conf (str "merge-riffle-indices "
+                     (apply str (interpose "," srcs))
+                     " -> " dst))
+    (.setJarByClass RiffleBuildJob)
+    (.setOutputKeyClass BytesWritable)
+    (.setOutputValueClass BytesWritable)
+    (.setMapOutputKeyClass IntWritable)
+    (.setMapOutputValueClass Text)
+    (.setInputFormatClass RiffleMergeJob$PathInputFormat)
+    (.setOutputFormatClass RiffleBuildJob$OutputFormat)
+    (.setPartitionerClass RiffleMergeJob$Partitioner)
+    (.setReducerClass RiffleMergeJob$Reducer)
+    (.setNumReduceTasks shards)
+    (FileInputFormat/addInputPath (Path. "ignore"))
+    (FileOutputFormat/setOutputPath (Path. dst))
+    (RiffleMergeJob$PathInputFormat/setNumShards (int shards))
+    (RiffleMergeJob$PathInputFormat/setPaths (mapv #(files conf %) srcs))))
 
-    (System/exit 0)))
+(def options
+  [["-s" "--shards SHARDS"
+    :default 64
+    :parse-fn #(long (Double/parseDouble %))]
+   [nil "--block-size BLOCKSIZE"
+    :default 4096
+    :parse-fn #(long (Double/parseDouble %))]
+   [nil "--compressor COMPRESSOR"
+    :parse-fn keyword
+    :default :lz4]])
+
+(defn -main [& args]
+  (if (not= "hadoop" (first args))
+
+    (apply riff/-main args)
+
+    (let [task (second args)
+          {:keys [options arguments summary errors]} (cli/parse-opts (drop 2 args) options)
+          {:keys [shards block-size compressor]} options
+          srcs (butlast arguments)
+          dst (last arguments)
+
+          conf (doto (Configuration.)
+                 (.setLong "mapred.task.timeout" (* 1000 60 60 6)))
+          job (case task
+                "build" (build-job conf shards srcs dst)
+                "merge" (merge-job conf shards srcs dst))]
+
+     (.waitForCompletion job true)
+
+     (System/exit 0))))

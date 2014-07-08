@@ -250,7 +250,7 @@
               (let [checksum (.readInt is)
                     block (u/read-prefixed-array is)]
                 (when-not (zero? (Array/getLength block))
-                  #_(let [checksum' (p/int (checksum-fn block))]
+                  (let [checksum' (p/int (checksum-fn block))]
                     (when (p/not== checksum checksum')
                       (throw (IOException. (str "bad checksum, expected " checksum " but got " checksum')))))
                   (concat
