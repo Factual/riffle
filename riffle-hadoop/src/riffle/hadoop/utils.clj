@@ -56,8 +56,9 @@
        @thunk)]))
 
 (defn merged-kvs [shard num-shards ^FileSystem fs paths]
-  (->> paths
-    (map #(.open fs (Path. %)))
-    (map r/entries)
-    (apply u/merge-sort-by (comparator :murmur32))
-    (filter #(= shard (partition % :murmur32 num-shards)))))
+  (let [cmp (comparator :murmur32)]
+    (->> paths
+      (map #(.open fs (Path. %)))
+      (map r/entries)
+      (apply u/merge-sort-by (fn [a b] (cmp (first a) (first b))))
+      (filter #(= shard (partition % :murmur32 num-shards))))))

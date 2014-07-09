@@ -73,7 +73,7 @@ public class RiffleMergeJob {
 
                 public void initialize(InputSplit split, TaskAttemptContext context) {
                     Configuration conf = context.getConfiguration();
-                    _numShards = conf.getInt("mapred.reduce.tasks", 64);
+                    _numShards = conf.getInt(JobContext.NUM_REDUCES, 1);
 
                     _paths = new LinkedList();
                     for (List<String> l : getPaths(conf)) {
@@ -136,13 +136,11 @@ public class RiffleMergeJob {
             require.invoke(Clojure.read("riffle.hadoop.utils"));
 
             _mergedSeqFn = Clojure.var("riffle.hadoop.utils", "merged-kvs");
-
-            _fs = FileSystem.get(new Configuration());
-
-            _numShards = new Configuration().getInt("mapred.reduce.tasks", 64);
         }
 
-        protected void cleanup(org.apache.hadoop.mapreduce.Reducer.Context context) {
+        protected void setup(org.apache.hadoop.mapreduce.Reducer.Context context) throws IOException {
+            _fs = FileSystem.get(context.getConfiguration());
+            _numShards = context.getConfiguration().getInt(JobContext.NUM_REDUCES, 1);
         }
 
         protected void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
