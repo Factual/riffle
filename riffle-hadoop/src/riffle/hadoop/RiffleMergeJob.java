@@ -15,6 +15,15 @@ import clojure.lang.IFn;
 
 public class RiffleMergeJob {
 
+    public static void setPaths(Job job, List<List<String>> paths) {
+        Utils.set(job.getConfiguration(), "riffle.merge.paths", paths);
+    }
+
+    public static List<List<String>> getPaths(Configuration conf) {
+        return (List<List<String>>) Utils.get(conf, "riffle.merge.paths", null);
+    }
+
+
     // Fake "input format" that just gives generated data
     public static class PathInputFormat extends InputFormat<IntWritable,Text> {
 
@@ -38,17 +47,6 @@ public class RiffleMergeJob {
             }
         }
 
-        private static List<List<String>> _pathLists;
-        private static int _numShards;
-
-        public static void setNumShards(Job job, int numShards) {
-            _numShards = numShards;
-        }
-
-        public static void setPaths(Job job, List<List<String>> paths) {
-            _pathLists = paths;
-        }
-
         public PathInputFormat() {
         }
 
@@ -68,13 +66,17 @@ public class RiffleMergeJob {
 
                 private LinkedList<PathTuple> _paths;
                 private int _numPaths;
+                private int _numShards;
 
                 private IntWritable _key;
                 private Text _value;
 
                 public void initialize(InputSplit split, TaskAttemptContext context) {
+                    Configuration conf = context.getConfiguration();
+                    _numShards = conf.getInt("mapred.reduce.tasks", 64);
+
                     _paths = new LinkedList();
-                    for (List<String> l : _pathLists) {
+                    for (List<String> l : getPaths(conf)) {
                         for (int i = 0; i < l.size(); i++) {
                             _paths.add(new PathTuple((int)(((float)i/l.size())*_numShards), l.get(i)));
                         }
@@ -125,12 +127,7 @@ public class RiffleMergeJob {
     //Reducer
     public static class Reducer extends org.apache.hadoop.mapreduce.Reducer<IntWritable, Text, BytesWritable, BytesWritable> {
 
-        private static int _numShards;
-
-        public void setNumShard(int numShards) {
-            _numShards = numShards;
-        }
-
+        private int _numShards;
         private IFn _mergedSeqFn;
         private FileSystem _fs;
 
@@ -141,6 +138,8 @@ public class RiffleMergeJob {
             _mergedSeqFn = Clojure.var("riffle.hadoop.utils", "merged-kvs");
 
             _fs = FileSystem.get(new Configuration());
+
+            _numShards = new Configuration().getInt("mapred.reduce.tasks", 64);
         }
 
         protected void cleanup(org.apache.hadoop.mapreduce.Reducer.Context context) {

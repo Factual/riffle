@@ -27,7 +27,7 @@
   (:gen-class))
 
  (defn build-job [^Configuration conf shards srcs dst]
-  (let [job (doto (Job. conf (str "build-riffle-index"
+  (let [job (doto (Job. conf (str "build-riffle-index: "
                                (apply str (interpose "," srcs))
                                " -> " dst))
               (.setJarByClass RiffleBuildJob)
@@ -53,7 +53,7 @@
 
 (defn merge-job [^Configuration conf shards srcs dst]
   (prn (mapv #(files conf %) srcs))
-  (doto (Job. conf (str "merge-riffle-indices "
+  (doto (Job. conf (str "merge-riffle-indices: "
                      (apply str (interpose "," srcs))
                      " -> " dst))
     (.setJarByClass RiffleBuildJob)
@@ -68,8 +68,7 @@
     (.setNumReduceTasks shards)
     (FileInputFormat/addInputPath (Path. "ignore"))
     (FileOutputFormat/setOutputPath (Path. dst))
-    (RiffleMergeJob$PathInputFormat/setNumShards (int shards))
-    (RiffleMergeJob$PathInputFormat/setPaths (mapv #(files conf %) srcs))))
+    (RiffleMergeJob/setPaths (mapv #(files conf %) srcs))))
 
 (def options
   [["-s" "--shards SHARDS"
@@ -83,6 +82,7 @@
     :default :lz4]])
 
 (defn -main [& args]
+  (prn args)
   (if (not= "hadoop" (first args))
 
     (apply riff/-main args)

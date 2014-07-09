@@ -1,6 +1,7 @@
 (ns riffle.hadoop.utils
   (:refer-clojure :exclude [partition comparator])
   (:require
+    [clojure.edn :as edn]
     [primitive-math :as p]
     [byte-streams :as bs]
     [byte-transforms :as bt]
@@ -10,11 +11,21 @@
   (:import
     [java.util.concurrent
      ArrayBlockingQueue]
+    [org.apache.hadoop.conf
+     Configuration]
     [org.apache.hadoop.fs
      FileSystem
      Path]
     [org.apache.hadoop.util
      Progressable]))
+
+(defn set-val! [^Configuration conf k v]
+  (.set conf (name k) (pr-str v)))
+
+(defn get-val [^Configuration conf k default-val]
+  (if-let [v (.get conf (name k))]
+    (edn/read-string v)
+    default-val))
 
 (let [l (Math/log 2)]
   (defn log2 [n]
@@ -27,11 +38,15 @@
 (defn comparator [hash-fn]
   (r/key-comparator #(bt/hash % hash-fn)))
 
-(defn writer [os _ compressor]
+(defn writer [os _ compressor block-size]
   (let [q (ArrayBlockingQueue. 1024)
         s (->> (repeatedly #(.take q))
             (take-while (complement #{::closed})))
-        thunk (future (w/write-riffle s os {:sorted? true, :compressor compressor}))
+        thunk (future
+                (w/write-riffle s os
+                  {:sorted? true
+                   :compressor compressor
+                   :block-size block-size}))
         cnt (atom 0)]
     [(fn [k v]
        (.put q [k v]))
