@@ -93,10 +93,9 @@
           srcs (butlast arguments)
           dst (last arguments)
 
-          _ (prn 'SHARDS shards)
-
           conf (doto (Configuration.)
-                 (.setLong "mapred.task.timeout" (* 1000 60 60 6)))
+                 (.setLong "mapred.task.timeout" (* 1000 60 60 6))
+                 (.setInt "riffle.shards" shards))
           job (case task
                 "build" (build-job conf shards srcs dst)
                 "merge" (merge-job conf shards srcs dst))]

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.ArrayList;
 import org.apache.hadoop.mapreduce.*;
 import org.apache.hadoop.io.*;
 import clojure.java.api.Clojure;
@@ -74,7 +75,7 @@ public class RiffleMergeJob {
 
                 public void initialize(InputSplit split, TaskAttemptContext context) {
                     Configuration conf = context.getConfiguration();
-                    _numShards = conf.getInt(JobContext.NUM_REDUCES, 1);
+                    _numShards = conf.getInt("riffle.shards", 1);
 
                     _paths = new LinkedList();
                     for (List<String> l : getPaths(conf)) {
@@ -141,7 +142,7 @@ public class RiffleMergeJob {
 
         protected void setup(org.apache.hadoop.mapreduce.Reducer.Context context) throws IOException {
             _fs = FileSystem.get(context.getConfiguration());
-            _numShards = context.getConfiguration().getInt(JobContext.NUM_REDUCES, 1);
+            _numShards = context.getConfiguration().getInt("riffle.shards", 1);
         }
 
         protected void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
