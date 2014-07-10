@@ -65,6 +65,7 @@
     (.setOutputFormatClass RiffleBuildJob$OutputFormat)
     (.setPartitionerClass RiffleMergeJob$Partitioner)
     (.setReducerClass RiffleMergeJob$Reducer)
+    (.setNumMapTasks 1)
     (.setNumReduceTasks shards)
     (FileInputFormat/addInputPath (Path. "ignore"))
     (FileOutputFormat/setOutputPath (Path. dst))
@@ -82,8 +83,7 @@
     :default :lz4]])
 
 (defn -main [& args]
-  (prn args)
-  (if (not= "hadoop" (first args))
+  (if-not (= "hadoop" (first args))
 
     (apply riff/-main args)
 
@@ -92,6 +92,8 @@
           {:keys [shards block-size compressor]} options
           srcs (butlast arguments)
           dst (last arguments)
+
+          _ (prn 'SHARDS shards)
 
           conf (doto (Configuration.)
                  (.setLong "mapred.task.timeout" (* 1000 60 60 6)))

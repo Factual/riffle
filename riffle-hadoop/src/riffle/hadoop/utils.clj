@@ -1,6 +1,7 @@
 (ns riffle.hadoop.utils
   (:refer-clojure :exclude [partition comparator])
   (:require
+    [clojure.tools.logging :as log]
     [clojure.edn :as edn]
     [primitive-math :as p]
     [byte-streams :as bs]
@@ -56,9 +57,10 @@
        @thunk)]))
 
 (defn merged-kvs [shard num-shards ^FileSystem fs paths]
+  (log/info 'REDUCING shard num-shards (pr-str paths))
   (let [cmp (comparator :murmur32)]
     (->> paths
-      (map #(.open fs (Path. %)))
+      (map #(.open fs (Path. %) 1e7))
       (map r/entries)
       (apply u/merge-sort-by (fn [a b] (cmp (first a) (first b))))
       (filter #(= shard (partition % :murmur32 num-shards))))))

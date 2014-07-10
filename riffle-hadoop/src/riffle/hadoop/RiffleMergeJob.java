@@ -5,7 +5,8 @@ import org.apache.hadoop.util.*;
 import org.apache.hadoop.conf.Configuration;
 import java.io.*;
 import java.util.List;
-import java.util.ArrayList;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.LinkedList;
 import org.apache.hadoop.mapreduce.*;
 import org.apache.hadoop.io.*;
@@ -144,12 +145,13 @@ public class RiffleMergeJob {
         }
 
         protected void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            List<String> paths = new ArrayList<String>();
+            Set<String> paths = new HashSet<String>();
             for(Text val : values) {
                 paths.add(val.toString());
             }
 
             for (List<byte[]> l : (List<List<byte[]>>)_mergedSeqFn.invoke(key.get(), new Integer(_numShards), _fs, paths)) {
+                context.progress();
                 context.write(new BytesWritable(l.get(0)), new BytesWritable(l.get(1)));
             }
         }
