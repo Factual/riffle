@@ -97,10 +97,11 @@
 
 (defn distinct-keys [s]
   (lazy-seq
-    (let [[k v] (first s)]
-      (cons [k v]
-        (distinct-keys
-          (drop-while #(bs/bytes== k (first %)) s))))))
+    (when-not (empty? s)
+      (let [[k v] (first s)]
+        (cons [k v]
+          (distinct-keys
+            (drop-while #(bs/bytes= k (first %)) s)))))))
 
 (defn merge-sort-by
   "Like sorted-interleave, but takes a specific keyfn, like sort-by."
