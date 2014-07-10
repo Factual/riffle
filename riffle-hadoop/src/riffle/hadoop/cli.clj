@@ -98,7 +98,9 @@
                  (.setInt "riffle.shards" shards))
           job (case task
                 "build" (build-job conf shards srcs dst)
-                "merge" (merge-job conf shards srcs dst))]
+                "merge" (do
+                          (.setInt conf "mapreduce.job.maps" 1)
+                          (merge-job conf shards srcs dst)))]
 
      (.waitForCompletion job true)
 
