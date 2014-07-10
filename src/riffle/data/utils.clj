@@ -1,6 +1,7 @@
 (ns riffle.data.utils
   (:require
     [primitive-math :as p]
+    [byte-streams :as bs]
     [clojure.java.io :as io])
   (:import
     [java.util
@@ -75,7 +76,7 @@
     (let [^SeqContainer x x
           cmp (p/long (cmp-fn (first s) (first (.s x))))]
       (if (p/zero? cmp)
-        (compare idx (.idx x))
+        (- (compare idx (.idx x)))
         cmp))))
 
 (defn- merge-sort-by- [cmp-fn ^PriorityQueue heap]
@@ -94,16 +95,24 @@
                 (chunk buf)
                 (merge-sort-by- cmp-fn heap)))))))))
 
+(defn distinct-keys [s]
+  (lazy-seq
+    (let [[k v] (first s)]
+      (cons [k v]
+        (distinct-keys
+          (drop-while #(bs/bytes== k (first %)) s))))))
+
 (defn merge-sort-by
   "Like sorted-interleave, but takes a specific keyfn, like sort-by."
   [cmp-fn & seqs]
   (if (= 1 (count seqs))
     (first seqs)
-    (merge-sort-by-
-      cmp-fn
-      (PriorityQueue.
-        ^Collection
-        (map #(SeqContainer. cmp-fn %1 %2) (range) (remove empty? seqs))))))
+    (distinct-keys
+      (merge-sort-by-
+        cmp-fn
+        (PriorityQueue.
+          ^Collection
+          (map #(SeqContainer. cmp-fn %1 %2) (range) (remove empty? seqs)))))))
 
 ;;;
 
