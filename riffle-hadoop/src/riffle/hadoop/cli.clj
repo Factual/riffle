@@ -52,7 +52,6 @@
       (mapv str))))
 
 (defn merge-job [^Configuration conf shards srcs dst]
-  (prn (mapv #(files conf %) srcs))
   (doto (Job. conf (str "merge-riffle-indices: "
                      (apply str (interpose "," srcs))
                      " -> " dst))
@@ -65,7 +64,6 @@
     (.setOutputFormatClass RiffleBuildJob$OutputFormat)
     (.setPartitionerClass RiffleMergeJob$Partitioner)
     (.setReducerClass RiffleMergeJob$Reducer)
-    (.setNumMapTasks 1)
     (.setNumReduceTasks shards)
     (FileInputFormat/addInputPath (Path. "ignore"))
     (FileOutputFormat/setOutputPath (Path. dst))
@@ -76,11 +74,9 @@
     :default 64
     :parse-fn #(long (Double/parseDouble %))]
    [nil "--block-size BLOCKSIZE"
-    :default 4096
+    :default 8192
     :parse-fn #(long (Double/parseDouble %))]
-   [nil "--compressor COMPRESSOR"
-    :parse-fn keyword
-    :default :lz4]])
+   [nil "--compressor COMPRESSOR"]])
 
 (defn -main [& args]
   (if-not (= "hadoop" (first args))
@@ -95,7 +91,9 @@
 
           conf (doto (Configuration.)
                  (.setLong "mapred.task.timeout" (* 1000 60 60 6))
-                 (.setInt "riffle.shards" shards))
+                 (.setInt "riffle.shards" shards)
+                 (.setInt "riffle.block-size" block-size)
+                 (.set "riffle.compressfn" compressor))
           job (case task
                 "build" (build-job conf shards srcs dst)
                 "merge" (do

@@ -152,7 +152,6 @@ public class RiffleMergeJob {
             }
 
             for (List<byte[]> l : (List<List<byte[]>>)_mergedSeqFn.invoke(key.get(), new Integer(_numShards), _fs, paths)) {
-                context.progress();
                 context.write(new BytesWritable(l.get(0)), new BytesWritable(l.get(1)));
             }
         }

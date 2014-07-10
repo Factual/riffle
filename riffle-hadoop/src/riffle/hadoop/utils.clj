@@ -63,4 +63,4 @@
       (map #(.open fs (Path. %) 1e7))
       (map r/entries)
       (apply u/merge-sort-by (fn [a b] (cmp (first a) (first b))))
-      (filter #(= shard (partition % :murmur32 num-shards))))))
+      (filter #(= shard (partition (first %) :murmur32 num-shards))))))
