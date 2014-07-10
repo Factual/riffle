@@ -76,7 +76,8 @@
    [nil "--block-size BLOCKSIZE"
     :default 8192
     :parse-fn #(long (Double/parseDouble %))]
-   [nil "--compressor COMPRESSOR"]])
+   [nil "--compressor COMPRESSOR"
+    :default "lz4"]])
 
 (defn -main [& args]
   (if-not (= "hadoop" (first args))
@@ -91,15 +92,17 @@
 
           conf (doto (Configuration.)
                  (.setLong "mapred.task.timeout" (* 1000 60 60 6))
-                 (.setInt "riffle.shards" shards)
-                 (.setInt "riffle.block-size" block-size)
-                 (.set "riffle.compressfn" compressor))
+                 (.setInt "riffle.shards" shards))
           job (case task
                 "build" (build-job conf shards srcs dst)
                 "merge" (do
                           (.setInt conf "mapreduce.job.maps" 1)
                           (merge-job conf shards srcs dst)))]
 
-     (.waitForCompletion job true)
+      (doto job
+        (RiffleBuildJob/setBlockSize block-size)
+        (RiffleBuildJob/setCompressFunction compressor))
 
-     (System/exit 0))))
+      (.waitForCompletion job true)
+
+      (System/exit 0))))

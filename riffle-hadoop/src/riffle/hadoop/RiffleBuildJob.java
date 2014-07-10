@@ -50,7 +50,7 @@ public class RiffleBuildJob {
 
     public static int getBlockSize(Configuration conf) {
         if (_blockSize == -1) {
-            _blockSize = ((Integer) Utils.get(conf, "riffle.block-size", 8192)).intValue();
+            _blockSize = ((Number)Utils.get(conf, "riffle.block-size", 8192)).intValue();
         }
         return _blockSize;
     }
