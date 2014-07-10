@@ -80,29 +80,26 @@
     :default "gzip"]])
 
 (defn -main [& args]
-  (if-not (= "hadoop" (first args))
+  (prn args)
+  (let [task (first args)
+        {:keys [options arguments summary errors]} (cli/parse-opts (rest args) options)
+        {:keys [shards block-size compressor]} options
+        srcs (butlast arguments)
+        dst (last arguments)
 
-    (apply riff/-main args)
+        conf (doto (Configuration.)
+               (.setLong "mapreduce.task.timeout" (* 1000 60 60 6))
+               (.setInt "riffle.shards" shards))
+        job (case task
+              "build" (build-job conf shards srcs dst)
+              "merge" (do
+                        (.setInt conf "mapreduce.job.maps" 1)
+                        (merge-job conf shards srcs dst)))]
 
-    (let [task (second args)
-          {:keys [options arguments summary errors]} (cli/parse-opts (drop 2 args) options)
-          {:keys [shards block-size compressor]} options
-          srcs (butlast arguments)
-          dst (last arguments)
+    (doto job
+      (RiffleBuildJob/setBlockSize block-size)
+      (RiffleBuildJob/setCompressFunction compressor))
 
-          conf (doto (Configuration.)
-                 (.setLong "mapred.task.timeout" (* 1000 60 60 6))
-                 (.setInt "riffle.shards" shards))
-          job (case task
-                "build" (build-job conf shards srcs dst)
-                "merge" (do
-                          (.setInt conf "mapreduce.job.maps" 1)
-                          (merge-job conf shards srcs dst)))]
+    (.waitForCompletion job true)
 
-      (doto job
-        (RiffleBuildJob/setBlockSize block-size)
-        (RiffleBuildJob/setCompressFunction compressor))
-
-      (.waitForCompletion job true)
-
-      (System/exit 0))))
+    (System/exit 0)))

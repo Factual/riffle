@@ -13,11 +13,11 @@
   (:import
     [java.io
      FileOutputStream
-     FileDescriptor]))
+     FileDescriptor])
+  (:gen-class))
 
 (def options
-  [["-e" "--encode"]
-   ["-d" "--delimiter DELIMITER"
+  [["-d" "--delimiter DELIMITER"
     :default "\t"]
    ["-k" "--keys"]
    ["-g" "--get KEY"]
@@ -51,8 +51,10 @@
   (FileOutputStream. FileDescriptor/out))
 
 (defn -main [& args]
-  (let [{:keys [options arguments summary errors]}
-        (cli/parse-opts args options)
+  (let [encode? (= "build" (first args))
+
+        {:keys [options arguments summary errors]}
+        (cli/parse-opts args (if encode? (rest options) options))
 
         {encode? :encode key :get keys? :keys base64? :base64 block-size :block-size compressor :compressor delimiter :delimiter}
         options
@@ -68,7 +70,7 @@
         (println e))
       (System/exit 1))
 
-    (when-let [f (and files (some #(not (.exists (io/file %))) files))]
+    (when-let [f (and files (first (filter #(not (.exists (io/file %))) files)))]
       (println "Invalid file:" f)
       (System/exit 1))
 

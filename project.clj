@@ -11,7 +11,8 @@
                    :stress :stress
                    :benchmark :benchmark}
   :profiles {:provided {:dependencies [[org.clojure/clojure "1.6.0"]]}
-             :uberjar {:aot :all}
+             :uberjar {:aot :all
+                       :dependencies [[org.clojure/clojure "1.6.0"]]}
              :dev {:dependencies [[org.clojure/clojure "1.6.0"]
                                   [org.clojure/test.check "0.5.8"]
                                   [criterium "0.4.3"]]}}
