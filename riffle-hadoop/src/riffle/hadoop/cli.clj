@@ -77,7 +77,7 @@
     :default 8192
     :parse-fn #(long (Double/parseDouble %))]
    [nil "--compressor COMPRESSOR"
-    :default "lz4"]])
+    :default "gzip"]])
 
 (defn -main [& args]
   (if-not (= "hadoop" (first args))

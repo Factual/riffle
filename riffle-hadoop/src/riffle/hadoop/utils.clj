@@ -57,7 +57,6 @@
        @thunk)]))
 
 (defn merged-kvs [shard num-shards ^FileSystem fs paths]
-  (log/info 'REDUCING shard num-shards (pr-str paths))
   (let [cmp (comparator :murmur32)]
     (->> paths
       (map #(.open fs (Path. %) 1e7))
