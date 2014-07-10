@@ -80,7 +80,6 @@
     :default "gzip"]])
 
 (defn -main [& args]
-  (prn args)
   (let [task (first args)
         {:keys [options arguments summary errors]} (cli/parse-opts (rest args) options)
         {:keys [shards block-size compressor]} options

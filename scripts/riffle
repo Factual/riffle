@@ -1,8 +1,8 @@
-#!/bin/sh
+#!/bin/bash
 
-if [ $1 == 'hadoop' ]
+if [ $1 == "hadoop" ]
 then
-    hadoop jar ~/.riffle/riffle-hadoop.jar ${*:2}}
+    hadoop jar ~/.riffle/riffle-hadoop.jar ${*:2}
 else
     java -jar ~/.riffle/riffle.jar $@
 fi
