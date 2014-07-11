@@ -243,7 +243,7 @@
            (finally
              (.put pool raf)))))))
 
-(defn entries [^InputStream is]
+(defn entries [^InputStream is kvs-filter]
   (let [header (h/decode-header is)
         f (fn this [^DataInputStream is checksum-fn decompress-fn]
             (lazy-seq
@@ -254,9 +254,33 @@
                     (when (p/not== checksum checksum')
                       (throw (IOException. (str "bad checksum, expected " checksum " but got " checksum')))))
                   (concat
-                    (-> block decompress-fn bs/to-byte-array b/block->kvs)
+                    (-> block decompress-fn bs/to-byte-array b/block->kvs kvs-filter)
                     (this is checksum-fn decompress-fn))))))]
     (.skip is (- (:blocks-offset header) (:header-length header)))
     (f (DataInputStream. is)
       #(bt/hash % (:checksum header))
       #(bt/decompress % (:compressor header)))))
+
+(defn validate [^InputStream is]
+  (let [is (DataInputStream. is)
+        header (h/decode-header is)
+        checksum-fn #(bt/hash % (:checksum header))
+        decompress-fn #(bt/decompress % (:compressor header))]
+    (.skip is (- (:blocks-offset header) (:header-length header)))
+    (loop [cnt 0, bad-blocks 0]
+      (let [[cnt' bad-blocks']
+            (try
+              (let [checksum (.readInt is)
+                    block (u/read-prefixed-array is)]
+                (if (zero? (Array/getLength block))
+                  [cnt bad-blocks]
+                  (let [checksum' (p/int (checksum-fn block))]
+                    (if (p/not== checksum checksum')
+                      [cnt (inc bad-blocks)]
+                      [(+ cnt (-> block decompress-fn bs/to-byte-array b/block->kvs clojure.core/count))
+                       bad-blocks]))))
+              (catch Throwable e
+                [cnt (inc bad-blocks)]))]
+        (if (and (= cnt cnt') (= bad-blocks bad-blocks'))
+          {:count (:count header), :effective-count cnt, :bad-blocks bad-blocks}
+          (recur (p/long cnt') (p/long bad-blocks')))))))

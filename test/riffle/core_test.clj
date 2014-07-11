@@ -36,6 +36,34 @@
 
 ;;;
 
+(defn equivalent? [r m]
+  (and
+    (every?
+      (fn [[k v]]
+        (= v (bs/to-string (r/get r k))))
+      m)
+
+    (= (set m)
+      (->> (r/entries r)
+        (map (fn [[k v]]
+               [(bs/to-string k)
+                (bs/to-string v)]))
+        set))))
+
+(def roundtrip-merge-prop
+  (prop/for-all
+    [a (gen/map gen/string-ascii gen/string-ascii)
+     b (gen/map gen/string-ascii gen/string-ascii)]
+
+    (w/write-riffle a "/tmp/check-riffle-a")
+    (w/write-riffle b "/tmp/check-riffle-b")
+
+    (let [s (-> (r/riffle-set)
+              (r/conj-riffle (r/riffle "/tmp/check-riffle-a"))
+              (r/conj-riffle (r/riffle "/tmp/check-riffle-b")))
+          m (merge a b)]
+      (equivalent? s m))))
+
 (def roundtrip-prop
   (prop/for-all
     [m (gen/map gen/string-ascii gen/string-ascii)]
@@ -43,25 +71,19 @@
     (w/write-riffle m "/tmp/check-riffle")
 
     (let [r (r/riffle "/tmp/check-riffle")]
-
-      (and
-        (every?
-          (fn [[k v]]
-            (= v (bs/to-string (r/get r k))))
-          m)
-
-        (= (set m)
-          (->> (r/entries r)
-            (map (fn [[k v]]
-                   [(bs/to-string k)
-                    (bs/to-string v)]))
-            set))))))
+      (equivalent? r m))))
 
 (defspec check-roundtrip 1e2
   roundtrip-prop)
 
+(defspec check-roundtrip-merge 1e2
+  roundtrip-merge-prop)
+
 (defspec ^:stress stress-roundtrip 1e5
   roundtrip-prop)
+
+(defspec ^:stress stress-roundtrip-merge 1e4
+  roundtrip-merge-prop)
 
 ;;;
 

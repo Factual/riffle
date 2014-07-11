@@ -111,11 +111,12 @@
 (defn build-hash-table [hash-entries-file]
   (let [in (io/file hash-entries-file)
         cnt (/ (.length in) slot-length)
-        slots (long (Math/ceil (/ cnt load-factor)))
+        slots (Math/max 1 (long (Math/ceil (/ cnt load-factor))))
         len (* slots slot-length)
         out (doto (u/transient-file) (u/resize-file len))
-        buf (u/mapped-buffer out "rw" 0 len)]
-    (doseq [[hash p idx] (-> in bs/to-input-stream (BufferedInputStream. 1e5) DataInputStream. entries)]
+        buf (u/mapped-buffer out "rw" 0 len)
+        s (-> in bs/to-input-stream (BufferedInputStream. 1e5) DataInputStream. entries)]
+    (doseq [[hash p idx] s]
       (write-entry buf 0 slots [hash p idx]))
     (.force buf)
     out))
