@@ -89,16 +89,18 @@
     (loop []
       (if (p/zero? (.available is))
         nil
-        (let [k' (u/read-prefixed-array is)
-              cmp (bs/compare-bytes k k')]
-          (cond
-            (p/> cmp 0)
-            (do
-              (.skip is (p/int->uint (.readInt is)))
-              (recur))
-
-            (p/== cmp 0)
+        (let [k' (u/read-prefixed-array is)]
+          (if (nil? k)
             (u/read-prefixed-array is)
+            (let [cmp (bs/compare-bytes k k')]
+              (cond
+                (p/> cmp 0)
+                (do
+                  (.skip is (p/int->uint (.readInt is)))
+                  (recur))
 
-            :else
-            nil))))))
+                (p/== cmp 0)
+                (u/read-prefixed-array is)
+
+                :else
+                nil))))))))

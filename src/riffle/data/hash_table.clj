@@ -89,6 +89,12 @@
            :else
            (recur (p/inc slot)))))))
 
+(defn random-entry [^ByteBuffer buf ^long slots]
+  (let [idx (p/long (rand-int slots))
+        loc (p/* idx slot-length)]
+    [(get-uint40 buf (p/+ loc 4))
+     (p/byte->ubyte (.get buf (p/+ loc 9)))]))
+
 (defn append-entry [^DataOutputStream os ^long hash ^long position ^long idx]
   (.writeInt os hash)
   (let [[b i] (split-uint40 position)]

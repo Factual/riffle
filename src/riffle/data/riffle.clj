@@ -226,6 +226,12 @@
         idx
         key))))
 
+(defn random-lookup [^Riffle r]
+  (let [[loc idx] (t/random-entry (.table r) (.table-slots r))]
+    (b/read-value (read-block r loc) idx nil)))
+
+;;; block-level ops
+
 (defn block-offsets
   ([^Riffle r]
      (block-offsets r 0))

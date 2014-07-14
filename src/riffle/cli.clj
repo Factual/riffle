@@ -100,7 +100,7 @@
 (def qs [0.25 0.5 0.75 0.9 0.95 0.99 0.999])
 
 (defn run-benchmark
-  [rs ks num-reads concurrency]
+  [rs num-reads concurrency]
   (let [latencies (ConcurrentLinkedQueue.)
         num-reads' (int (/ num-reads concurrency))]
     (try
@@ -110,7 +110,7 @@
            (future
              (dotimes [_ num-reads']
                (let [start (System/nanoTime)]
-                 (r/get rs (rand-nth ks))
+                 (riff/random-lookup (rand-nth rs))
                  (let [end (System/nanoTime)]
                    (.add latencies (- end start))))))))
        doall
@@ -156,21 +156,15 @@
         benchmark?
         (do
           (assert files "must define files to benchmark")
-          (print "building key list... ")
+          (flush)
           (let [{:keys [num-reads]} options
-                files (map io/file files)
-                ks (->> files
-                     (mapcat #(riff/entries (bs/to-input-stream %) (partial take 1)))
-                     shuffle
-                     vec)
-                _  (println "built.")
-                rs (->> files (map r/riffle) (reduce #(r/conj-riffle %1 %2) (r/riffle-set)))]
+                rs (->> files (map io/file) (map r/riffle) vec)]
             (dotimes [log2-readers 8]
               (let [readers (long (Math/pow 2 log2-readers))]
                 (println)
                 (println "with" readers (if (= 1 readers) "reader:" "readers:"))
                 (let [start (System/nanoTime)
-                      latencies (run-benchmark rs ks num-reads readers)
+                      latencies (run-benchmark rs num-reads readers)
                       end (System/nanoTime)
                       throughput (/ num-reads (/ (- end start) 1e9))]
                   (println (format "throughput: %.2f reads/sec" throughput))
