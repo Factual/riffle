@@ -89,7 +89,7 @@
      (.substring s (inc idx))]))
 
 (defn -main [& args]
-  (let [args' (remove config? s)
+  (let [args' (remove config? args)
         task (first args')
         {:keys [options arguments summary errors]} (cli/parse-opts (rest args') options)
         {:keys [shards block-size compressor]} options
@@ -100,14 +100,14 @@
                (.setLong "mapreduce.task.timeout" (* 1000 60 60 6))
                (.setInt "riffle.shards" shards))
 
+        _  (doseq [[k v] (->> args (filter config?) (map config->kv))]
+             (.set conf k v))
+
         job (case task
               "build" (build-job conf shards srcs dst)
               "merge" (do
                         (.setInt conf "mapreduce.job.maps" 1)
                         (merge-job conf shards srcs dst)))]
-
-    (doseq [[k v] (->> args (filter config) (map config->kv))]
-      (.set conf k v))
 
     (doto job
       (RiffleBuildJob/setBlockSize block-size)

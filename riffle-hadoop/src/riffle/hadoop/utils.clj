@@ -36,6 +36,9 @@
   (p/>> (p/int->uint (bt/hash k hash-fn))
     (p/- 32 (p/long (log2 num-partitions)))))
 
+(defn comparator [hash-fn]
+  (r/key-comparator #(bt/hash % hash-fn)))
+
 (defn writer [os _ compressor block-size]
   (let [q (ArrayBlockingQueue. 1024)
         s (->> (repeatedly #(.take q))
