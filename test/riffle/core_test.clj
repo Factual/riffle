@@ -38,13 +38,17 @@
 
 (defn equivalent? [r m]
   (and
-    (every?
-      (fn [[k v]]
-        (= v (bs/to-string (r/get r k))))
-      m)
+    (if (vector? r)
+      true
+      (every?
+        (fn [[k v]]
+          (= v (bs/to-string (r/get r k))))
+        m))
 
     (= (set m)
-      (->> (r/entries r)
+      (->> (if (vector? r)
+             (apply r/entries r)
+             (r/entries r))
         (map (fn [[k v]]
                [(bs/to-string k)
                 (bs/to-string v)]))
@@ -58,11 +62,17 @@
     (w/write-riffle a "/tmp/check-riffle-a")
     (w/write-riffle b "/tmp/check-riffle-b")
 
-    (let [s (-> (r/riffle-set)
-              (r/conj-riffle (r/riffle "/tmp/check-riffle-a"))
-              (r/conj-riffle (r/riffle "/tmp/check-riffle-b")))
-          m (merge a b)]
-      (equivalent? s m))))
+    (let [m (merge a b)]
+      (and
+        (equivalent?
+          (-> (r/riffle-set)
+            (r/conj-riffle (r/riffle "/tmp/check-riffle-a"))
+            (r/conj-riffle (r/riffle "/tmp/check-riffle-b")))
+          m)
+        (equivalent?
+          [(r/riffle "/tmp/check-riffle-a")
+           (r/riffle "/tmp/check-riffle-b")]
+          m)))))
 
 (def roundtrip-prop
   (prop/for-all

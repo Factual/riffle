@@ -79,9 +79,19 @@
    [nil "--compressor COMPRESSOR"
     :default "gzip"]])
 
+(defn config? [^String s]
+  (.startsWith s "-D"))
+
+(defn config->kv [^String s]
+  (let [s (.substring s 2)
+        idx (.indexOf s "=")]
+    [(.substring s 0 idx)
+     (.substring s (inc idx))]))
+
 (defn -main [& args]
-  (let [task (first args)
-        {:keys [options arguments summary errors]} (cli/parse-opts (rest args) options)
+  (let [args' (remove config? s)
+        task (first args')
+        {:keys [options arguments summary errors]} (cli/parse-opts (rest args') options)
         {:keys [shards block-size compressor]} options
         srcs (butlast arguments)
         dst (last arguments)
@@ -89,11 +99,15 @@
         conf (doto (Configuration.)
                (.setLong "mapreduce.task.timeout" (* 1000 60 60 6))
                (.setInt "riffle.shards" shards))
+
         job (case task
               "build" (build-job conf shards srcs dst)
               "merge" (do
                         (.setInt conf "mapreduce.job.maps" 1)
                         (merge-job conf shards srcs dst)))]
+
+    (doseq [[k v] (->> args (filter config) (map config->kv))]
+      (.set conf k v))
 
     (doto job
       (RiffleBuildJob/setBlockSize block-size)

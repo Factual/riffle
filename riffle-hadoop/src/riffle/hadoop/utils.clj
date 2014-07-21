@@ -36,9 +36,6 @@
   (p/>> (p/int->uint (bt/hash k hash-fn))
     (p/- 32 (p/long (log2 num-partitions)))))
 
-(defn comparator [hash-fn]
-  (r/key-comparator #(bt/hash % hash-fn)))
-
 (defn writer [os _ compressor block-size]
   (let [q (ArrayBlockingQueue. 1024)
         s (->> (repeatedly #(.take q))
@@ -57,9 +54,7 @@
        @thunk)]))
 
 (defn merged-kvs [shard num-shards ^FileSystem fs paths]
-  (let [cmp (comparator :murmur32)]
-    (->> paths
-      (map #(.open fs (Path. %) 1e7))
-      (map r/entries)
-      (apply u/merge-sort-by (fn [a b] (cmp (first a) (first b))))
-      (filter #(= shard (partition (first %) :murmur32 num-shards))))))
+  (->> paths
+    (map #(.open fs (Path. %) 1e7))
+    (apply r/entries)
+    (filter #(= shard (partition (first %) :murmur32 num-shards)))))

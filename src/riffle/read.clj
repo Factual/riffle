@@ -94,21 +94,35 @@
   "Returns a lazy sequence of 2-tuples representing keys and values.  This does not hold
    onto any file handles or other system resources, and can be safely discarded without
    being closed."
-  [r]
-  (if (instance? RiffleSet r)
-    (let [^RiffleSet r r
-          cmp (riffle.data.riffle/key-comparator (.hash-fn r))]
-      (->> r
-        .idx->riffles
-        (apply concat)
-        distinct
-        (sort-by (.riffle->priority r))
-        (map entries)
-        (apply u/merge-sort-by (fn [[a _] [b _]] (cmp a b)))))
-    (->> r
-      r/block-offsets
-      (map (partial r/read-block r))
-      (mapcat b/block->kvs))))
+  ([r]
+     (cond
+
+       (instance? RiffleSet r)
+       (let [^RiffleSet r r
+             cmp (riffle.data.riffle/key-comparator (.hash-fn r))]
+         (->> r
+           .idx->riffles
+           (apply concat)
+           distinct
+           (sort-by (.riffle->priority r))
+           (map entries)
+           (apply u/merge-sort-by (fn [[a _] [b _]] (cmp a b)))))
+
+       (instance? Riffle r)
+       (->> r
+         r/block-offsets
+         (map (partial r/read-block r))
+         (mapcat b/block->kvs))
+
+       :else
+       (->> r
+         bs/to-input-stream
+         stream-entries)))
+  ([x & rst]
+     (let [cmp (riffle.data.riffle/key-comparator #(bt/hash % :murmur32))]
+       (->> (list* x rst)
+         (map entries)
+         (apply u/merge-sort-by (fn [[a _] [b _]] (cmp a b)))))))
 
 (defn get
   "Returns the value associated with `key` as a byte-array, or `nil` if there is no such
