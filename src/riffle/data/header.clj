@@ -34,7 +34,6 @@
            count
            shared-hash
            hash-mask
-           blocks-offset
            hash-table-offset
            file-length]
     :as opts}]
@@ -47,17 +46,16 @@
                      bs/to-byte-array)
         len (Array/getLength descriptor)
         file-length (p/long file-length)
-        blocks-offset (p/long blocks-offset)
         hash-table-offset (p/long hash-table-offset)
         header-length (p/+ 48 len)]
     (.write os (bs/to-byte-array "rffl"))
-    (.writeLong os (p/+ file-length header-length))
+    (.writeLong os file-length)
     (u/write-prefixed-array os descriptor)
     (.writeLong os count)
     (.writeInt os (p/uint->int shared-hash))
     (.writeInt os (p/uint->int hash-mask))
-    (.writeLong os (p/+ blocks-offset header-length))
-    (.writeLong os (p/+ hash-table-offset header-length))
+    (.writeLong os header-length)
+    (.writeLong os hash-table-offset)
     (.toByteArray baos)))
 
 (defn read-rffl [^DataInputStream is]

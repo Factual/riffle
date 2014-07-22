@@ -44,10 +44,12 @@
         s (->> (repeatedly #(.take q))
             (take-while (complement #{::closed})))
         thunk (future
-                (w/write-riffle s os
-                  {:sorted? true
-                   :compressor compressor
-                   :block-size block-size}))
+                (bs/transfer
+                  (w/write-riffle s (u/transient-file)
+                    {:sorted? true
+                     :compressor compressor
+                     :block-size block-size})
+                  os))
         cnt (atom 0)]
     [(fn [k v]
        (.put q [k v]))

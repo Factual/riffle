@@ -42,67 +42,6 @@
         (bs/compare-bytes a b)
         (compare h-a h-b)))))
 
-(defn kvs->riffle-parts
-  [kvs
-   {:keys [sorted?
-           compress-fn
-           hash-fn
-           checksum-fn
-           block-size
-           chunk-size]
-    :or {chunk-size 1e8}}]
-  (let [^File block-file (u/transient-file)
-        ^File table-file (u/transient-file)
-        count (atom 0)
-        blocks (->> kvs
-                 (map #(do (swap! count inc) %))
-                 (#(if sorted? % (s/sort-kvs (key-comparator hash-fn) chunk-size %)))
-                 (b/kvs->blocks hash-fn block-size))
-        slots (p/long (Math/ceil (/ @count t/load-factor)))]
-
-    (let [table-file (u/transient-file)
-          table (-> table-file
-                  bs/to-output-stream
-                  (BufferedOutputStream. 1e5)
-                  DataOutputStream.)]
-      (with-open [os (-> block-file
-                       FileOutputStream.
-                       (BufferedOutputStream. (long 1e5))
-                       DataOutputStream.)]
-        (loop
-          [s blocks
-           hash (p/int (or (some-> s first :hash->offset keys first p/int->uint) 0))
-           mask (p/int->uint -1)
-           pos 0]
-          (if (empty? s)
-            {:count @count
-             :shared-hash hash
-             :hash-mask mask
-             :table-file (let [_ (.close table)
-                               t (t/build-hash-table table-file)]
-                           (.delete table-file)
-                           t)
-             :block-file (do
-                           (.writeInt os 0)
-                           (.writeInt os 0)
-                           block-file)}
-            (let [{:keys [hash->offset bytes] :as block} (first s)
-                  hash->index (zipmap (keys hash->offset) (range))
-                  bytes (bs/to-byte-array (compress-fn bytes))
-                  len (Array/getLength bytes)
-                  [hash mask] (reduce
-                                (fn [[hash mask] h]
-                                  (let [h (p/int->uint h)]
-                                    [(p/bit-and hash h)
-                                     (p/bit-and mask (p/bit-not (p/bit-xor hash h)))]))
-                                [hash mask]
-                                (->> hash->index keys (map #(p/int->uint %))))]
-              (doseq [[hash idx] hash->index]
-                (t/append-entry table hash pos idx))
-              (.writeInt os (p/int (checksum-fn bytes)))
-              (u/write-prefixed-array os bytes)
-              (recur (rest s) (p/int hash) (p/int mask) (p/+ pos 8 len)))))))))
-
 (defn delete-and-recreate [^File f]
   (when (.exists f)
     (.delete f))
@@ -110,34 +49,92 @@
 
 (defn write-riffle
   [kvs x {:keys [sorted? compressor hash checksum block-size]}]
-  (let [{:keys [count ^File table-file ^File block-file hash-mask shared-hash] :as parts}
-        (kvs->riffle-parts kvs
-          {:compress-fn (if (= :none compressor) identity #(bt/compress % compressor))
-           :hash-fn #(bt/hash % hash)
-           :checksum-fn #(bt/hash % checksum)
-           :block-size block-size
-           :sorted? sorted?})
-        x (if (string? x) (io/file x) x)
-        _ (when (instance? File x) (delete-and-recreate x))
-        os (bs/convert x OutputStream)
-        header (h/encode-header
-                 {:file-length (p/+ (.length block-file) (.length table-file))
-                  :version "0.1.0"
-                  :compressor compressor
-                  :hash hash
-                  :checksum checksum
-                  :count count
-                  :hash-mask hash-mask
-                  :shared-hash shared-hash
-                  :blocks-offset 0
-                  :hash-table-offset (.length block-file)})]
-    (bs/transfer header os {:close? false})
-    (bs/transfer block-file os {:close? false})
-    (.delete block-file)
-    (bs/transfer table-file os {:close? true})
-    (.delete table-file)
+  (let [compress-fn (if (= :none compressor) identity #(bt/compress % compressor))
+        hash-fn #(bt/hash % hash)
+        checksum-fn #(bt/hash % checksum)
+        f (doto (io/file x) delete-and-recreate)
+        raf (doto (RandomAccessFile. f "rw") (.seek 0))
 
-    true))
+        count (atom 0)
+        blocks (->> kvs
+                 (map #(do (swap! count inc) %))
+                 (#(if sorted? % (s/sort-kvs (key-comparator hash-fn) 1e7 %)))
+                 (b/kvs->blocks hash-fn block-size))
+        slots (p/long (Math/ceil (/ @count t/load-factor)))
+
+        table-file (u/transient-file)
+        table (-> table-file
+                bs/to-output-stream
+                (BufferedOutputStream. 1e5)
+                DataOutputStream.)]
+
+    (.write raf
+      ^bytes
+      (h/encode-header
+        {:file-length 0
+         :version "0.1.0"
+         :compressor compressor
+         :hash hash
+         :checksum checksum
+         :count @count
+         :hash-mask 0
+         :shared-hash 0
+         :hash-table-offset 0}))
+
+    (loop
+      [s blocks
+       shared-hash (p/int (or (some-> s first :hash->offset keys first p/int->uint) 0))
+       hash-mask (p/int->uint -1)
+       pos 0]
+      (if (empty? s)
+
+        (let [len (+ (.length raf) 8)]
+
+          ;; add trailer entry
+          (.writeInt raf 0)
+          (.writeInt raf 0)
+
+          ;; add hash-table
+          (do
+            (.close table)
+            (.close raf)
+            (t/append-hash-table table-file f)
+            (.delete table-file))
+
+          ;; overwrite header
+          (with-open [raf (RandomAccessFile. f "rw")]
+            (.seek raf 0)
+            (.write raf
+              ^bytes
+              (h/encode-header
+                {:file-length (.length raf)
+                 :version "0.1.0"
+                 :compressor compressor
+                 :hash hash
+                 :checksum checksum
+                 :count @count
+                 :hash-mask hash-mask
+                 :shared-hash shared-hash
+                 :hash-table-offset len})))
+
+          f)
+
+        (let [{:keys [hash->offset bytes] :as block} (first s)
+              hash->index (zipmap (keys hash->offset) (range))
+              bytes (bs/to-byte-array (compress-fn bytes))
+              len (Array/getLength bytes)
+              [hash mask] (reduce
+                            (fn [[hash mask] h]
+                              (let [h (p/int->uint h)]
+                                [(p/bit-and hash h)
+                                 (p/bit-and mask (p/bit-not (p/bit-xor hash h)))]))
+                            [shared-hash hash-mask]
+                            (->> hash->index keys (map #(p/int->uint %))))]
+          (doseq [[hash idx] hash->index]
+            (t/append-entry table hash pos idx))
+          (.writeInt raf (p/int (checksum-fn bytes)))
+          (u/write-prefixed-array raf bytes)
+          (recur (rest s) (p/int hash) (p/int mask) (p/+ pos 8 len)))))))
 
 ;; read
 

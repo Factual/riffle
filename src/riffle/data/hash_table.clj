@@ -114,15 +114,18 @@
             (.close is)
             ::closed))))))
 
-(defn build-hash-table [hash-entries-file]
+(defn append-hash-table [hash-entries-file riffle-file]
   (let [in (io/file hash-entries-file)
+        out (io/file riffle-file)
         cnt (/ (.length in) slot-length)
         slots (Math/max 1 (long (Math/ceil (/ cnt load-factor))))
+        offset (.length out)
         len (* slots slot-length)
-        out (doto (u/transient-file) (u/resize-file len))
-        buf (u/mapped-buffer out "rw" 0 len)
+        _ (with-open [raf (RandomAccessFile. out "rw")]
+            (.setLength raf (+ offset len)))
+        buf (u/mapped-buffer out "rw" offset len)
         s (-> in bs/to-input-stream (BufferedInputStream. 1e5) DataInputStream. entries)]
     (doseq [[hash p idx] s]
       (write-entry buf 0 slots [hash p idx]))
     (.force buf)
-    out))
+    nil))
