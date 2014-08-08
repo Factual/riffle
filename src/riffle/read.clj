@@ -12,6 +12,7 @@
      [utils :as u]])
   (:import
     [java.io
+     IOException
      InputStream
      File]
     [riffle.data.riffle
@@ -112,7 +113,12 @@
        (->> r
          r/block-offsets
          (map (partial r/read-block r))
-         (mapcat b/block->kvs))
+         (mapcat
+           (fn [block]
+             (try
+               (b/block->kvs block)
+               (catch IOException e
+                 nil)))))
 
        :else
        (->> r
@@ -127,7 +133,7 @@
 (defn get
   "Returns the value associated with `key` as a byte-array, or `nil` if there is no such
    entry."
-  [^Riffle r key]
+  [r key]
   (let [key (bs/to-byte-array key)]
     (if (instance? RiffleSet r)
       (let [^RiffleSet r r

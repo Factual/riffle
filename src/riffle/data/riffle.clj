@@ -253,11 +253,12 @@
               (let [checksum (.readInt is)
                     block (u/read-prefixed-array is)]
                 (when-not (zero? (Array/getLength block))
-                  (let [checksum' (p/int (checksum-fn block))]
-                    (when (p/not== checksum checksum')
-                      (throw (IOException. (str "bad checksum, expected " checksum " but got " checksum')))))
                   (concat
-                    (-> block decompress-fn bs/to-byte-array b/block->kvs kvs-filter)
+                    (when (p/== checksum (p/int (checksum-fn block)))
+                      (try
+                        (-> block decompress-fn bs/to-byte-array b/block->kvs kvs-filter)
+                        (catch IOException e
+                          nil)))
                     (this is checksum-fn decompress-fn))))))]
     (.skip is (- (:blocks-offset header) (:header-length header)))
     (f (DataInputStream. is)

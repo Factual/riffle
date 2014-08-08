@@ -215,10 +215,12 @@
                             (parse-tsv delimiter base64?)
                             (s/sort-kvs comparator 1e7)))))
                     (apply u/merge-sort-by comparator))]
-          (w/write-riffle kvs (out)
-            {:sorted? true
-             :compressor compressor
-             :block-size block-size}))
+          (bs/transfer
+            (w/write-riffle kvs (u/transient-file)
+              {:sorted? true
+               :compressor compressor
+               :block-size block-size})
+            (out)))
 
         ;; build from stdin
         (and build? (not files))
