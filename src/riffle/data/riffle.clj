@@ -150,6 +150,11 @@
    ^long count
    ^long block-offset
    ^long table-slots]
+
+  java.io.Closeable
+  (close [this]
+    (.finalize this))
+
   Object
   (finalize [_]
     (loop []

@@ -48,7 +48,14 @@
 (defrecord RiffleSet
   [idx->riffles
    riffle->priority
-   hash-fn])
+   hash-fn]
+  java.io.Closeable
+  (close [_]
+    (doseq [^Riffle r (->> idx->riffles
+                        vals
+                        (apply concat)
+                        distinct)]
+      (.close r))))
 
 (def ^:private ^:const set-bits 10)
 
