@@ -153,14 +153,15 @@
 
   java.io.Closeable
   (close [this]
-    (.finalize this))
-
-  Object
-  (finalize [_]
+    ;; TODO: this isn't particularly safe, since subsequent calls will deadlock
     (loop []
       (when-not (.isEmpty file-pool)
         (let [^RandomAccessFile f (.poll file-pool)]
-          (.close f))))))
+          (.close f)))))
+
+  Object
+  (finalize [this]
+    (.close this)))
 
 (defn riffle
   ([file]

@@ -98,6 +98,7 @@
 
         conf (doto (Configuration.)
                (.setLong "mapreduce.task.timeout" (* 1000 60 60 6))
+               (.setLong "mapred.task.timeout" (* 1000 60 60 6))
                (.setInt "riffle.shards" shards))
 
         _  (doseq [[k v] (->> args (filter config?) (map config->kv))]
