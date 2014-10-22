@@ -57,9 +57,15 @@
                         distinct)]
       (.close r))))
 
+(alter-meta! #'->RiffleSet assoc :private true)
+(alter-meta! #'map->RiffleSet assoc :private true)
+
 (def ^:private ^:const set-bits 10)
 
 (defn riffle-set
+  "Creates a Riffle set, which can be used to simultaneously query
+   multiple Riffle files.  Values in files added later take precedence
+   over those added previously."
   ([]
      (riffle-set :murmur32))
   ([hash]
@@ -78,7 +84,9 @@
       #(p/== hash (p/bit-and (p/long %) mask))
       (range (Math/pow 2 set-bits)))))
 
-(defn conj-riffle [^RiffleSet s ^Riffle r]
+(defn conj-riffle
+  "Adds a Riffle file to the set."
+  [^RiffleSet s ^Riffle r]
   (RiffleSet.
     (reduce
       (fn [v idx] (update-in v [idx] #(cons r %)))
@@ -87,7 +95,9 @@
     (assoc (.riffle->priority s) r (->> (.riffle->priority s) vals (apply max 0) inc))
     (.hash-fn s)))
 
-(defn disj-riffle [^RiffleSet s ^Riffle r]
+(defn disj-riffle
+  "Removes a Riffle file from a set."
+  [^RiffleSet s ^Riffle r]
   (let [r? #{r}]
     (RiffleSet.
       (mapv
@@ -99,9 +109,9 @@
 ;;;
 
 (defn entries
-  "Returns a lazy sequence of 2-tuples representing keys and values.  This does not hold
-   onto any file handles or other system resources, and can be safely discarded without
-   being closed."
+  "Takes either a Riffle file or Riffle set, and returns a lazy sequence of 2-tuples
+   representing keys and values.  This does not hold onto any file handles or other
+   system resources, and can be safely discarded without being closed."
   ([r]
      (cond
 
@@ -138,8 +148,8 @@
          (apply u/merge-sort-by (fn [[a _] [b _]] (cmp a b)))))))
 
 (defn get
-  "Returns the value associated with `key` as a byte-array, or `nil` if there is no such
-   entry."
+  "Given a Riffle file or Riffle set, returns the value associated with `key`
+   as a byte-array, or `nil` if there is no such entry."
   [r key]
   (let [key (bs/to-byte-array key)]
     (if (instance? RiffleSet r)

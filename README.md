@@ -70,7 +70,7 @@ We can also arbitrarily combine TSV and Riffle files to create new Riffle files.
 
 Riffle stores keys and values as binary data, but for the convenience of the command-line tool all data is treated as plaintext.  To build a file with binary data, you can specify that the input is Base64 encoded with the `-b` flag:
 
-```clj
+```
 > echo -e "`echo -n hello | base64`\t`echo -n goodbye | base64`" > /tmp/binary.tsv
 
 > riffle build -b /tmp/binary.tsv > /tmp/binary-riffle
@@ -86,7 +86,7 @@ Additional tasks include `validate` and `benchmark`
 
 ```
 > riffle validate /tmp/binary-riffle
-1 blocks, 67.00 average bytes per block
+1 block(s), 67.00 average bytes per compressed block
 no bad blocks
 
 > riffle benchmark /tmp/binary-riffle

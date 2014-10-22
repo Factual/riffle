@@ -182,7 +182,7 @@
                 (map riff/validate)
                 (apply merge-with +))]
           (println
-            (format "%d blocks, %.2f average bytes per block"
+            (format "%d block(s), %.2f average bytes per compressed block"
               blocks
               (double (/ block-length blocks))))
           (if (and (zero? bad-blocks) (= count effective-count))
