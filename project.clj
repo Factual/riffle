@@ -17,4 +17,8 @@
                                   [org.clojure/test.check "0.5.8"]
                                   [criterium "0.4.3"]]
                    :main riffle.cli}}
-  :jvm-opts ["-server" "-Xmx1g"])
+   :codox {:include [riffle.write
+                     riffle.read]
+           :output-dir "doc"}
+   :plugins [[codox "0.8.10"]]
+   :jvm-opts ["-server" "-Xmx1g"])
