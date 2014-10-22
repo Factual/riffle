@@ -19,6 +19,7 @@
     [java.util.concurrent
      ConcurrentLinkedQueue]
     [java.io
+     FileInputStream
      FileOutputStream
      FileDescriptor])
   (:gen-class))
@@ -40,9 +41,7 @@
     :default :lz4]])
 
 (def comparator
-  (let [cmp (riffle.data.riffle/key-comparator #(bt/hash % :murmur32))]
-    (fn [[a _] [b _]]
-      (cmp a b))))
+  (riffle.data.riffle/key-comparator #(bt/hash % :murmur32)))
 
 (defn parse-tsv [^String separator base64? x]
   (let [len (count separator)
@@ -51,6 +50,7 @@
             bs/to-byte-array)]
     (->> x
       bs/to-line-seq
+      (remove empty?)
       (map
         (fn [^String s]
           (let [idx (.indexOf s separator)]
@@ -63,7 +63,7 @@
   (FileOutputStream. FileDescriptor/out))
 
 (defn in []
-  (FileOutputStream. FileDescriptor/in))
+  (FileInputStream. FileDescriptor/in))
 
 ;;;
 
@@ -174,15 +174,19 @@
 
         ;; validate the file
         validate?
-        (let [{:keys [count effective-count bad-blocks]}
+        (let [{:keys [count effective-count bad-blocks blocks block-length]}
               (->> (if files
                      (map io/file files)
                      [(in)])
                 (map bs/to-input-stream)
                 (map riff/validate)
                 (apply merge-with +))]
+          (println
+            (format "%d blocks, %.2f average bytes per block"
+              blocks
+              (double (/ block-length blocks))))
           (if (and (zero? bad-blocks) (= count effective-count))
-            (println "everything's fine")
+            (println "no bad blocks")
             (do
               (println
                 (format "%d bad blocks, %d missing entries (%3.f%%)"
@@ -195,9 +199,7 @@
         (if files
           (let [rs (->> files (map r/riffle) reverse)]
             (if-let [v (some
-                         #(or
-                            (when base64? (r/get % (bs/to-byte-array key)))
-                            (r/get % (encoder key)))
+                         #(r/get % (encoder key))
                          rs)]
               (println (bs/to-string (decoder v)))
               (do
@@ -210,7 +212,10 @@
                     (map
                       (fn [f]
                         (if (r/riffle? f)
-                          (r/stream-entries (bs/to-input-stream f))
+                          (-> f
+                            io/file
+                            bs/to-input-stream
+                            r/stream-entries)
                           (->> (io/file f)
                             (parse-tsv delimiter base64?)
                             (s/sort-kvs comparator 1e7)))))
@@ -225,9 +230,11 @@
         ;; build from stdin
         (and build? (not files))
         (let [kvs (parse-tsv delimiter base64? (in))]
-          (w/write-riffle kvs (out)
-            {:compressor compressor
-             :block-size block-size}))
+          (bs/transfer
+            (w/write-riffle kvs (u/transient-file)
+              {:compressor compressor
+               :block-size block-size})
+            (out)))
 
         ;; decode
         (not build?)

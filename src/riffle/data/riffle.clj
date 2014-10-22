@@ -277,20 +277,28 @@
         checksum-fn #(bt/hash % (:checksum header))
         decompress-fn #(bt/decompress % (:compressor header))]
     (.skip is (- (:blocks-offset header) (:header-length header)))
-    (loop [cnt 0, bad-blocks 0]
-      (let [[cnt' bad-blocks']
+    (loop [cnt 0, bad-blocks 0, block-length 0, blocks 0]
+      (let [[cnt' bad-blocks' block-length' blocks']
             (try
               (let [checksum (.readInt is)
-                    block (u/read-prefixed-array is)]
+                    block (u/read-prefixed-array is)
+                    block-length' (p/+ block-length (Array/getLength block))
+                    blocks' (p/inc blocks)]
                 (if (zero? (Array/getLength block))
-                  [cnt bad-blocks]
+                  [cnt bad-blocks block-length blocks]
                   (let [checksum' (p/int (checksum-fn block))]
                     (if (p/not== checksum checksum')
-                      [cnt (inc bad-blocks)]
+                      [cnt (inc bad-blocks) block-length' blocks']
                       [(+ cnt (-> block decompress-fn bs/to-byte-array b/block->kvs clojure.core/count))
-                       bad-blocks]))))
+                       bad-blocks
+                       block-length'
+                       blocks']))))
               (catch Throwable e
-                [cnt (inc bad-blocks)]))]
+                [cnt (p/inc bad-blocks) block-length blocks]))]
         (if (and (= cnt cnt') (= bad-blocks bad-blocks'))
-          {:count (:count header), :effective-count cnt, :bad-blocks bad-blocks}
-          (recur (p/long cnt') (p/long bad-blocks')))))))
+          {:count (:count header)
+           :effective-count cnt
+           :bad-blocks bad-blocks
+           :blocks blocks
+           :block-length block-length}
+          (recur (p/long cnt') (p/long bad-blocks') (p/long block-length') (p/long blocks')))))))

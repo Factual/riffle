@@ -5,8 +5,7 @@
     [riffle.data.riffle :as l]))
 
 (defn write-riffle
-  "Writes out a Riffle file.  `x` may either be a file path, or something
-   that can be coerced to an `OutputStream`."
+  "Writes out a Riffle file.  `x` may either be a file path or a `java.io.File`."
   ([kvs x]
      (write-riffle kvs x nil))
   ([kvs
@@ -16,7 +15,7 @@
           compressor :lz4
           hash :murmur32
           checksum :crc32
-          block-size 16384}}]
+          block-size 4096}}]
      (l/write-riffle kvs x
        {:sorted? sorted?
         :compressor compressor
