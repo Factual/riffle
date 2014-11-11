@@ -24,7 +24,8 @@
           compressor :lz4
           hash :murmur32
           checksum :crc32
-          block-size 4096}}]
+          block-size 4096}
+     :as options}]
      (l/write-riffle kvs x
        {:sorted? sorted?
         :compressor compressor
