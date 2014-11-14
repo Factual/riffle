@@ -7,7 +7,7 @@
                  [byte-transforms "0.1.3"]
                  [byte-streams "0.2.0-alpha4"]
                  [org.clojure/tools.cli "0.3.1"]
-                 [factual/riffle "0.1.1"]
+                 [factual/riffle "0.1.2"]
                  [org.clojure/tools.logging "0.3.1"]]
   :profiles {:provided {:dependencies [[org.apache.hadoop/hadoop-client "2.2.0"]]}
              :uberjar {:aot [riffle.hadoop.cli]}}
