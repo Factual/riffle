@@ -2,7 +2,7 @@
 
 Riffle is a read-only key/value storage format, strongly influenced by the [cdb](http://cr.yp.to/cdb.html) and [sorted-string table](https://www.igvita.com/2012/02/06/sstable-and-log-structured-storage-leveldb/) formats.  Like cdb, it has a fixed memory cost per key (12 bytes per key), rather than having to keep the entire keyspace in memory.  Like sorted-string tables, it allows for block compression of the values, and allows for files to be merged in linear time.  Like both formats, a typical lookup requires a single disk read.
 
-Riffle files can be built either locally or via Hadoop, allowing for datasets comprising billions of entries to be compiled into a set of sharded Riffle riffles.
+Riffle files can be built either locally or via Hadoop, allowing for datasets comprising billions of entries to be compiled into a set of sharded Riffle files.
 
 ### getting started
 
