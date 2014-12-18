@@ -2,7 +2,7 @@
 
 Riffle is a read-only key/value storage format, strongly influenced by the [cdb](http://cr.yp.to/cdb.html) and [sorted-string table](https://www.igvita.com/2012/02/06/sstable-and-log-structured-storage-leveldb/) formats.  Like cdb, it has a fixed memory cost per key (12 bytes per key), rather than having to keep the entire keyspace in memory.  Like sorted-string tables, it allows for block compression of the values, and allows for files to be merged in linear time.  Like both formats, a typical lookup requires a single disk read.
 
-Riffle files can be built either locally or via Hadoop, allowing for datasets comprising billions of entries to be compiled into a set of sharded Riffle riffles.
+Riffle files can be built either locally or via Hadoop, allowing for datasets comprising billions of entries to be compiled into a set of sharded Riffle files.
 
 ### getting started
 
@@ -106,7 +106,7 @@ latencies (in ms):
 
 ### riffle and hadoop
 
-To compile a Riffle index via Hadoop, you can use `riffle hadoop build src1 src2 ... srcN dst`, which takes tab-delimited text input files and builds Riffle indices, and `riffle hadoop merge src1 src2 ... srcN dst`, which takes multiple Riffle indices and merges them together, with precedence given to the right-most index.  These command must be run in a context where the Hadoop environment is already configured.
+To compile a Riffle index via Hadoop, you can use `riffle hadoop build src1 src2 ... srcN dst`, which takes tab-delimited text input files and builds Riffle indices, and `riffle hadoop merge src1 src2 ... srcN dst`, which takes multiple Riffle indices and merges them together, with precedence given to the right-most index.  These commands must be run in a context where the Hadoop environment is already configured.
 
 To build from a source other than tab-delimited files, it's recommended that you customize the mapper for the [RiffleBuildJob](https://github.com/Factual/riffle/blob/master/riffle-hadoop/src/riffle/hadoop/RiffleBuildJob.java#L144-L159), which is trivial to modify.  Once modified, your custom Hadoop job can be installed via `scripts/install.sh`, and invoked via the same `riffle hadoop ...` mechanism.
 
