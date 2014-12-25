@@ -28,6 +28,7 @@
      OutputStream
      FileOutputStream
      FileInputStream
+     ByteArrayInputStream
      BufferedOutputStream
      DataOutputStream]))
 
@@ -214,11 +215,25 @@
 (defn read-block [^Riffle r offset]
   (with-raf [raf r]
     (.seek raf (p/+ (p/long offset) (.block-offset r)))
-    (let [checksum (.readInt raf)
-          block (u/read-prefixed-array raf)]
+    (let [ary (byte-array 4096)
+          len (.read raf ary)
+          baos (DataInputStream. (ByteArrayInputStream. ary))
+          checksum (.readInt baos)
+          len' (p/int->uint (.readInt baos))
+          block (byte-array len')]
+
+      ;; copy out any remaining bytes
+      (if (p/<= len' (p/- len 8))
+        (System/arraycopy ary 8 block 0 len')
+        (do
+          (System/arraycopy ary 8 block 0 (p/- len 8))
+          (.read raf block (p/- len 8) (p/- len' (p/- len 8)))))
+
+      ;; compare checksums
       (let [checksum' (p/int ((.checksum-fn r) block))]
         (when (p/not== checksum checksum')
           (throw (IOException. (str "bad checksum, expected " checksum " but got " checksum')))))
+
       (-> block ((.decompress-fn r)) bs/to-byte-array))))
 
 (defn lookup [^Riffle r ^bytes key ^long hash]
