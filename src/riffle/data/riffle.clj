@@ -73,7 +73,7 @@
       ^bytes
       (h/encode-header
         {:file-length 0
-         :version "0.1.0"
+         :version "0.1.3"
          :compressor compressor
          :hash hash
          :checksum checksum
@@ -146,6 +146,7 @@
    decompress-fn
    hash-fn
    checksum-fn
+   sampler
    ^long shared-hash
    ^long hash-mask
    ^long count
@@ -187,7 +188,7 @@
            (when-not (= file-length (.length file))
              (throw (IOException. "Invalid file length")))
 
-           (Riffle.
+           (->Riffle
              file
              (u/mapped-buffer file "r" hash-table-offset table-len)
              (ArrayBlockingQueue.
@@ -197,6 +198,7 @@
              (if (= :none compressor) identity #(bt/decompress % compressor))
              #(bt/hash % hash)
              #(bt/hash % checksum)
+             (atom (u/sampler))
              shared-hash
              hash-mask
              count
@@ -215,12 +217,15 @@
 (defn read-block [^Riffle r offset]
   (with-raf [raf r]
     (.seek raf (p/+ (p/long offset) (.block-offset r)))
-    (let [ary (byte-array 4096)
+    (let [sampler (.sampler r)
+          ary (byte-array (u/estimate-size @sampler))
           len (.read raf ary)
           baos (DataInputStream. (ByteArrayInputStream. ary))
           checksum (.readInt baos)
           len' (p/int->uint (.readInt baos))
           block (byte-array len')]
+
+      (swap! sampler u/update-sampler (p/+ len' 8))
 
       ;; copy out any remaining bytes
       (if (p/<= len' (p/- len 8))

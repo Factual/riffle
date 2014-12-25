@@ -162,3 +162,31 @@
 
     :else
     (throw (IllegalArgumentException.))))
+
+;;;
+
+(defrecord BlockSizeSampler
+  [^double mean
+   ^double m2
+   ^long cnt])
+
+(defn sampler []
+  (->BlockSizeSampler 0 0 0))
+
+(defn update-sampler [^BlockSizeSampler s ^double value]
+  (let [mean (.mean s)
+        count (p/inc (.cnt s))
+        delta (p/- value mean)
+        mean  (p/+ mean (p/div delta (p/double count)))
+        m2    (if (p/> count 1)
+                (p/+ (.m2 s) (p/* delta (p/- value mean)))
+                0)]
+    (->BlockSizeSampler mean m2 count)))
+
+(defn estimate-size ^long [^BlockSizeSampler s]
+  (let [variance (if (> (.cnt s) 1)
+                   (p/div (.m2 s) (p/double (p/dec (.cnt s))))
+                   4096)]
+    (p/long
+      (p/+ (.mean s)
+        (Math/sqrt variance)))))
