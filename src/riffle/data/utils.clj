@@ -189,4 +189,6 @@
                    4096)]
     (p/long
       (p/+ (.mean s)
-        (Math/sqrt variance)))))
+        (p/div
+          (Math/sqrt variance)
+          4.0)))))
