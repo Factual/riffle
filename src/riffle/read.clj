@@ -23,7 +23,7 @@
 (defn riffle
   "Returns a Riffle object that can be used with `get` and `entries`."
   ([path]
-     (riffle 1))
+     (riffle path 1))
   ([path num-file-descriptors]
      (r/riffle path num-file-descriptors)))
 
