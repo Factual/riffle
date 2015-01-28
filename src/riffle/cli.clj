@@ -158,7 +158,8 @@
           (assert files "must define files to benchmark")
           (flush)
           (let [{:keys [num-reads]} options
-                rs (->> files (map io/file) (map r/riffle) vec)]
+                descriptors (int (/ 1024 (count files)))
+                rs (->> files (map io/file) (map #(r/riffle descriptors)) vec)]
             (dotimes [log2-readers 8]
               (let [readers (long (Math/pow 2 log2-readers))]
                 (println)

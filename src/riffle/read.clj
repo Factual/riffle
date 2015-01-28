@@ -22,8 +22,10 @@
 
 (defn riffle
   "Returns a Riffle object that can be used with `get` and `entries`."
-  [path]
-  (r/riffle path))
+  ([path]
+     (riffle 1))
+  ([path num-file-descriptors]
+     (r/riffle path num-file-descriptors)))
 
 (defn path [^Riffle r]
   (.getPath ^File (.file r)))

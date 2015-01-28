@@ -30,7 +30,8 @@
      FileInputStream
      ByteArrayInputStream
      BufferedOutputStream
-     DataOutputStream]))
+     DataOutputStream
+     BufferedInputStream]))
 
 ;; write
 
@@ -164,7 +165,6 @@
   Object
   (finalize [this]
     (.close this)))
-
 (defn riffle
   ([file]
      (riffle file 1))
@@ -273,7 +273,8 @@
              (.put pool raf)))))))
 
 (defn entries [^InputStream is kvs-filter]
-  (let [header (h/decode-header is)
+  (let [is (BufferedInputStream. is 1e5)
+        header (h/decode-header is)
         f (fn this [^DataInputStream is checksum-fn decompress-fn]
             (lazy-seq
               (let [checksum (.readInt is)
