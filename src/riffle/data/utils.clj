@@ -81,19 +81,10 @@
 
 (defn- merge-sort-by- [cmp-fn ^PriorityQueue heap]
   (lazy-seq
-    (loop [chunk-idx 0, buf (chunk-buffer 32)]
-      (if (.isEmpty heap)
-        (chunk-cons (chunk buf) nil)
-        (let [^SeqContainer container (.poll heap)]
-          (chunk-append buf (first (.s container)))
-          (when-let [s' (seq (rest (.s container)))]
-            (.offer heap (SeqContainer. cmp-fn (.idx container) s')))
-          (let [chunk-idx' (unchecked-inc chunk-idx)]
-            (if (< chunk-idx' 32)
-              (recur chunk-idx' buf)
-              (chunk-cons
-                (chunk buf)
-                (merge-sort-by- cmp-fn heap)))))))))
+    (when-let [^SeqContainer container (.poll heap)]
+      (when-let [s' (seq (rest (.s container)))]
+        (.offer heap (SeqContainer. cmp-fn (.idx container) s')))
+      (cons (first (.s container)) (merge-sort-by- cmp-fn heap)))))
 
 (defn distinct-keys [s]
   (lazy-seq
@@ -104,7 +95,6 @@
             (drop-while #(bs/bytes= k (first %)) s)))))))
 
 (defn merge-sort-by
-  "Like sorted-interleave, but takes a specific keyfn, like sort-by."
   [cmp-fn & seqs]
   (if (= 1 (count seqs))
     (first seqs)
@@ -114,6 +104,27 @@
         (PriorityQueue.
           ^Collection
           (map #(SeqContainer. cmp-fn %1 %2) (range) (remove empty? seqs)))))))
+
+(defn merged-keys [f s]
+  (lazy-seq
+    (when-not (empty? s)
+      (let [[k v] (first s)]
+        (loop [v v, s (rest s)]
+          (if (empty? s)
+            [[k v]]
+            (let [k' (ffirst s)]
+              (if (bs/bytes= k k')
+                (recur (f v (-> s first second)) (rest s))
+                (cons [k v] (merged-keys f s))))))))))
+
+(defn merge-sort-with
+  [merge-fn cmp-fn & seqs]
+  (merged-keys merge-fn
+    (merge-sort-by-
+      cmp-fn
+      (PriorityQueue.
+        ^Collection
+        (map #(SeqContainer. cmp-fn %1 %2) (range) (remove empty? seqs))))))
 
 ;;;
 

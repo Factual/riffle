@@ -165,6 +165,7 @@
   Object
   (finalize [this]
     (.close this)))
+
 (defn riffle
   ([file]
      (riffle file 1))

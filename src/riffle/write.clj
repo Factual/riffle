@@ -2,7 +2,10 @@
   (:require
     [byte-streams :as bs]
     [clojure.java.io :as io]
-    [riffle.data.riffle :as l]))
+    [riffle.read :as r]
+    [riffle.data.riffle :as l]
+    [riffle.data.utils :as u]
+    [byte-transforms :as bt]))
 
 (defn write-riffle
   "Writes out a Riffle file based on a sequence of key/value pairs that can be coerced to binary data.
@@ -32,3 +35,20 @@
         :hash hash
         :checksum checksum
         :block-size block-size})))
+
+(defn merge-riffles
+  "Merges together a collection of Riffle files into a single index, writing out to `x`, which may either be a file path
+   or a `java.io.File.`  The options mirror those in `write-riffle`."
+  ([merge-fn paths x]
+     (merge-riffles merge-fn paths x nil))
+  ([merge-fn riffles x options]
+     (let [cmp (riffle.data.riffle/key-comparator #(bt/hash % :murmur32))
+           kvs (->> riffles
+                 (map r/riffle)
+                 (map r/entries)
+                 (apply u/merge-sort-with merge-fn (fn [[a _] [b _]] (cmp a b)))
+                 (map (fn [[k v]] [(bs/to-byte-array k) (bs/to-byte-array v)])))]
+       (write-riffle
+         kvs
+         x
+         (assoc options :sorted? true)))))

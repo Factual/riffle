@@ -74,6 +74,26 @@
            (r/riffle "/tmp/check-riffle-b")]
           m)))))
 
+(let [merge-fn (fn [a b]
+                 (str
+                   (+
+                     (read-string (bs/to-string a))
+                     (read-string (bs/to-string b)))))]
+  (def roundtrip-merge-with-prop
+    (prop/for-all
+      [a (gen/map gen/string-ascii (gen/fmap str gen/int))
+       b (gen/map gen/string-ascii (gen/fmap str gen/int))]
+
+      (w/write-riffle a "/tmp/check-riffle-a")
+      (w/write-riffle b "/tmp/check-riffle-b")
+      (w/merge-riffles merge-fn ["/tmp/check-riffle-a" "/tmp/check-riffle-b"] "/tmp/check-riffle-c")
+
+      (let [m (merge-with merge-fn a b)]
+        (and
+          (equivalent?
+            (r/riffle "/tmp/check-riffle-c")
+            m))))))
+
 (def roundtrip-prop
   (prop/for-all
     [m (gen/map gen/string-ascii gen/string-ascii)]
@@ -89,11 +109,17 @@
 (defspec check-roundtrip-merge 1e2
   roundtrip-merge-prop)
 
+(defspec check-roundtrip-merge-with 1e2
+  roundtrip-merge-with-prop)
+
 (defspec ^:stress stress-roundtrip 1e5
   roundtrip-prop)
 
 (defspec ^:stress stress-roundtrip-merge 1e4
   roundtrip-merge-prop)
+
+(defspec ^:stress stress-roundtrip-merge-with 1e4
+  roundtrip-merge-with-prop)
 
 ;;;
 
