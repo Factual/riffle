@@ -139,7 +139,7 @@
 
         encoder (if base64? #(bt/decode % :base64) bs/to-byte-array)
         decoder (if base64? #(bt/encode % :base64) identity)
-        riffle (if mmap? r/mapped-riffle r/riffle)]
+        riffle (if mmap? r/mapped-riffle #(r/riffle % (int (/ 1024 (count files)))))]
 
     (when errors
       (println "Expected arguments:\n" summary "\n")
@@ -160,8 +160,7 @@
           (assert files "must define files to benchmark")
           (flush)
           (let [{:keys [num-reads]} options
-                descriptors (int (/ 1024 (count files)))
-                rs (->> files (map io/file) (map #(riffle descriptors)) vec)]
+                rs (->> files (map io/file) (map riffle) vec)]
             (dotimes [log2-readers 8]
               (let [readers (long (Math/pow 2 log2-readers))]
                 (println)
