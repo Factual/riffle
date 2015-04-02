@@ -30,6 +30,7 @@
    ["-k" "--keys"]
    ["-g" "--get KEY"]
    ["-b" "--base64"]
+   [nil  "--mmap"]
    ["-n" "--num-reads NUMREADS"
     :default 1e6
     :parse-fn #(long (Double/parseDouble %))]
@@ -131,13 +132,14 @@
         {:keys [options arguments summary errors]}
         (cli/parse-opts (if (or build? validate? benchmark?) (rest args) args) options)
 
-        {key :get keys-only? :keys base64? :base64 block-size :block-size compressor :compressor delimiter :delimiter}
+        {key :get keys-only? :keys base64? :base64 block-size :block-size compressor :compressor delimiter :delimiter mmap? :mmap}
         options
 
         files (seq arguments)
 
         encoder (if base64? #(bt/decode % :base64) bs/to-byte-array)
-        decoder (if base64? #(bt/encode % :base64) identity)]
+        decoder (if base64? #(bt/encode % :base64) identity)
+        riffle (if mmap? r/mapped-riffle r/riffle)]
 
     (when errors
       (println "Expected arguments:\n" summary "\n")
@@ -159,7 +161,7 @@
           (flush)
           (let [{:keys [num-reads]} options
                 descriptors (int (/ 1024 (count files)))
-                rs (->> files (map io/file) (map #(r/riffle descriptors)) vec)]
+                rs (->> files (map io/file) (map #(riffle descriptors)) vec)]
             (dotimes [log2-readers 8]
               (let [readers (long (Math/pow 2 log2-readers))]
                 (println)
@@ -198,7 +200,7 @@
         ;; lookup individual key
         key
         (if files
-          (let [rs (->> files (map r/riffle) reverse)]
+          (let [rs (->> files (map riffle) reverse)]
             (if-let [v (some
                          #(r/get % (encoder key))
                          rs)]

@@ -65,13 +65,18 @@
     (let [m (merge a b)]
       (and
         (equivalent?
-          (-> (r/riffle-set)
-            (r/conj-riffle (r/riffle "/tmp/check-riffle-a"))
-            (r/conj-riffle (r/riffle "/tmp/check-riffle-b")))
+          [(-> (r/riffle-set)
+             (r/conj-riffle (r/riffle "/tmp/check-riffle-a"))
+             (r/conj-riffle (r/riffle "/tmp/check-riffle-b")))
+           (-> (r/riffle-set)
+             (r/conj-riffle (r/mapped-riffle "/tmp/check-riffle-a"))
+             (r/conj-riffle (r/mapped-riffle "/tmp/check-riffle-b")))]
           m)
         (equivalent?
           [(r/riffle "/tmp/check-riffle-a")
-           (r/riffle "/tmp/check-riffle-b")]
+           (r/riffle "/tmp/check-riffle-b")
+           (r/mapped-riffle "/tmp/check-riffle-a")
+           (r/mapped-riffle "/tmp/check-riffle-b")]
           m)))))
 
 (let [merge-fn (fn [a b]
@@ -89,10 +94,10 @@
       (w/merge-riffles merge-fn ["/tmp/check-riffle-a" "/tmp/check-riffle-b"] "/tmp/check-riffle-c")
 
       (let [m (merge-with merge-fn a b)]
-        (and
-          (equivalent?
-            (r/riffle "/tmp/check-riffle-c")
-            m))))))
+        (equivalent?
+          [(r/riffle "/tmp/check-riffle-c")
+           (r/mapped-riffle "/tmp/check-riffle-c")]
+          m)))))
 
 (def roundtrip-prop
   (prop/for-all
@@ -100,8 +105,10 @@
 
     (w/write-riffle m "/tmp/check-riffle")
 
-    (let [r (r/riffle "/tmp/check-riffle")]
-      (equivalent? r m))))
+    (equivalent?
+      [(r/riffle "/tmp/check-riffle")
+       (r/mapped-riffle "/tmp/check-riffle")]
+      m)))
 
 (defspec check-roundtrip 1e2
   roundtrip-prop)

@@ -144,6 +144,7 @@
   [^File file
    ^ByteBuffer table
    ^BlockingQueue file-pool
+   ^ByteBuffer mapped-buffer
    decompress-fn
    hash-fn
    checksum-fn
@@ -151,7 +152,8 @@
    ^long shared-hash
    ^long hash-mask
    ^long count
-   ^long block-offset
+   ^long blocks-offset
+   ^long table-offset
    ^long table-slots]
 
   java.io.Closeable
@@ -165,6 +167,43 @@
   Object
   (finalize [this]
     (.close this)))
+
+(defn mapped-riffle
+  [file]
+  (let [file (io/file file)]
+    (with-open [is (FileInputStream. file)]
+      (let [{:keys [version
+                    compressor
+                    hash
+                    checksum
+                    blocks-offset
+                    hash-table-offset
+                    shared-hash
+                    hash-mask
+                    count
+                    file-length] :as header}
+            (h/decode-header is)
+
+            table-len (p/- (.length file) (p/long hash-table-offset))]
+
+        (when-not (= file-length (.length file))
+          (throw (IOException. "Invalid file length")))
+
+        (->Riffle
+          file
+          (u/mapped-buffer file "r" hash-table-offset table-len)
+          nil
+          (u/mapped-buffer file "r" blocks-offset (- hash-table-offset blocks-offset))
+          (if (= :none compressor) identity #(bt/decompress % compressor))
+          #(bt/hash % hash)
+          #(bt/hash % checksum)
+          (atom (u/sampler))
+          shared-hash
+          hash-mask
+          count
+          blocks-offset
+          hash-table-offset
+          (p/div table-len t/slot-length))))))
 
 (defn riffle
   ([file]
@@ -196,6 +235,7 @@
                pool-size
                true
                (vec (repeatedly pool-size #(RandomAccessFile. file "r"))))
+             nil
              (if (= :none compressor) identity #(bt/decompress % compressor))
              #(bt/hash % hash)
              #(bt/hash % checksum)
@@ -204,6 +244,7 @@
              hash-mask
              count
              blocks-offset
+             hash-table-offset
              (p/div table-len t/slot-length)))))))
 
 (defmacro with-raf [[raf riffle] & body]
@@ -215,32 +256,47 @@
        (finally
          (.put pool# ~raf)))))
 
+(defn- read-block- [^Riffle r ^long offset read-fn]
+  (let [sampler (.sampler r)
+        buf (.mapped-buffer r)
+        max-len (p/- (.table-offset r) (.blocks-offset r) offset)
+        len (p/min max-len (u/estimate-size @sampler))
+        ary (byte-array len)
+        _ (read-fn offset ary 0 len)
+        baos (DataInputStream. (ByteArrayInputStream. ary))
+        checksum (.readInt baos)
+        len' (p/int->uint (.readInt baos))
+        block (byte-array len')]
+
+    (swap! sampler u/update-sampler (p/+ len' 8))
+
+    ;; copy out any remaining bytes
+    (if (p/<= len' (p/- len 8))
+      (System/arraycopy ary 8 block 0 len')
+      (do
+        (System/arraycopy ary 8 block 0 (p/- len 8))
+        (read-fn (p/+ offset len) block (p/- len 8) (p/- len' (p/- len 8)))))
+
+    ;; compare checksums
+    (let [checksum' (p/int ((.checksum-fn r) block))]
+      (when (p/not== checksum checksum')
+        (throw (IOException. (str "bad checksum, expected " checksum " but got " checksum')))))
+
+    (-> block ((.decompress-fn r)) bs/to-byte-array)))
+
 (defn read-block [^Riffle r offset]
-  (with-raf [raf r]
-    (.seek raf (p/+ (p/long offset) (.block-offset r)))
-    (let [sampler (.sampler r)
-          ary (byte-array (u/estimate-size @sampler))
-          len (.read raf ary)
-          baos (DataInputStream. (ByteArrayInputStream. ary))
-          checksum (.readInt baos)
-          len' (p/int->uint (.readInt baos))
-          block (byte-array len')]
-
-      (swap! sampler u/update-sampler (p/+ len' 8))
-
-      ;; copy out any remaining bytes
-      (if (p/<= len' (p/- len 8))
-        (System/arraycopy ary 8 block 0 len')
-        (do
-          (System/arraycopy ary 8 block 0 (p/- len 8))
-          (.read raf block (p/- len 8) (p/- len' (p/- len 8)))))
-
-      ;; compare checksums
-      (let [checksum' (p/int ((.checksum-fn r) block))]
-        (when (p/not== checksum checksum')
-          (throw (IOException. (str "bad checksum, expected " checksum " but got " checksum')))))
-
-      (-> block ((.decompress-fn r)) bs/to-byte-array))))
+  (if-let [^ByteBuffer buf (.mapped-buffer r)]
+    (read-block- r offset
+      (fn [buf-offset ary ary-offset len]
+        (-> buf
+          .duplicate
+          ^ByteBuffer (.position buf-offset)
+          (.get ary ary-offset len))))
+    (with-raf [raf r]
+      (read-block- r offset
+        (fn [file-offset ary ary-offset len]
+          (.seek raf (p/+ (p/long file-offset) (.blocks-offset r)))
+          (.read raf ary ary-offset len))))))
 
 (defn lookup [^Riffle r ^bytes key ^long hash]
   (when (p/== (p/bit-and (.hash-mask r) hash) (.shared-hash r))
@@ -261,17 +317,23 @@
      (block-offsets r 0))
   ([^Riffle r ^long offset]
      (lazy-seq
-       (let [^BlockingQueue pool (.file-pool r)
-             ^RandomAccessFile raf (.take pool)]
-         (try
-           (.seek raf (p/+ (.block-offset r) offset))
-           (let [_ (.readInt raf)
-                 len (.readInt raf)
-                 offset' (p/+ offset 8 len)]
-             (when (pos? len)
-               (cons offset (block-offsets r offset'))))
-           (finally
-             (.put pool raf)))))))
+       (if-let [^ByteBuffer buf (.mapped-buffer r)]
+
+         (let [len (.getInt buf (p/+ offset 4))
+               offset' (p/+ offset 8 len)]
+           (when (pos? len)
+             (cons offset (block-offsets r offset'))))
+
+         (let [^BlockingQueue pool (.file-pool r)
+               ^RandomAccessFile raf (.take pool)]
+           (try
+             (.seek raf (p/+ (.blocks-offset r) offset 4))
+             (let [len (.readInt raf)
+                   offset' (p/+ offset 8 len)]
+               (when (pos? len)
+                 (cons offset (block-offsets r offset'))))
+             (finally
+               (.put pool raf))))))))
 
 (defn entries [^InputStream is kvs-filter]
   (let [is (BufferedInputStream. is 1e5)

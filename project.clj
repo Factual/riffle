@@ -14,7 +14,7 @@
                        :dependencies [[org.clojure/clojure "1.6.0"]]
                        :main riffle.cli}
              :dev {:dependencies [[org.clojure/clojure "1.6.0"]
-                                  [org.clojure/test.check "0.5.9"]
+                                  [org.clojure/test.check "0.7.0"]
                                   [criterium "0.4.3"]]
                    :main riffle.cli}}
    :codox {:include [riffle.write

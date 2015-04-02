@@ -27,6 +27,11 @@
   ([path num-file-descriptors]
      (r/riffle path num-file-descriptors)))
 
+(defn mapped-riffle
+  "Returns a memory-mapped Riffle object that can be used with `get` and `entries`."
+  [path]
+  (r/mapped-riffle path))
+
 (defn path [^Riffle r]
   (.getPath ^File (.file r)))
 
