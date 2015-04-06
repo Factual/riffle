@@ -50,12 +50,14 @@
     (try
       (let [fc (.getChannel raf)]
         (try
-          (.map fc
-            (case mode
-              "rw" FileChannel$MapMode/READ_WRITE
-              "r" FileChannel$MapMode/READ_ONLY)
-            (or offset 0)
-            (or length (.length raf)))
+          (doto
+            (.map fc
+              (case mode
+                "rw" FileChannel$MapMode/READ_WRITE
+                "r" FileChannel$MapMode/READ_ONLY)
+              (or offset 0)
+              (or length (.length raf)))
+            .load)
           (finally
             (.close fc))))
       (finally

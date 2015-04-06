@@ -9,7 +9,7 @@ Riffle files can be built either locally or via Hadoop, allowing for datasets co
 To use Riffle in your project, add this to your project.clj:
 
 ```clj
-[factual/riffle "0.1.2"]
+[factual/riffle "0.1.3"]
 ```
 
 To use the `riffle` command-line tool, clone the Riffle repository, make sure [Leiningen](https://github.com/technomancy/leiningen) is installed, and then install the tool:
