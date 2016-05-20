@@ -29,7 +29,7 @@
           hash :murmur32
           checksum :crc32
           block-size 4096
-          chunk-size 1e7}
+          chunk-size 1e8}
      :as options}]
      (l/write-riffle kvs x
        {:sorted? sorted?
