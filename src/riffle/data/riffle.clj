@@ -50,7 +50,7 @@
   (.createNewFile f))
 
 (defn write-riffle
-  [kvs x {:keys [sorted? compressor hash checksum block-size]}]
+  [kvs x {:keys [sorted? compressor hash checksum block-size chunk-size]}]
   (let [compress-fn (if (= :none compressor) identity #(bt/compress % compressor))
         hash-fn #(bt/hash % hash)
         checksum-fn #(bt/hash % checksum)
@@ -60,7 +60,7 @@
         count (atom 0)
         blocks (->> kvs
                  (map #(do (swap! count inc) %))
-                 (#(if sorted? % (s/sort-kvs (key-comparator hash-fn) 1e7 %)))
+                 (#(if sorted? % (s/sort-kvs (key-comparator hash-fn) chunk-size %)))
                  (b/kvs->blocks hash-fn block-size))
         slots (p/long (Math/ceil (/ @count t/load-factor)))
 

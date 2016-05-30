@@ -1,4 +1,4 @@
-(defproject factual/riffle "0.1.3"
+(defproject factual/riffle "0.1.4"
   :description "a write-once key/value store"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
@@ -11,14 +11,17 @@
                    :stress :stress
                    :benchmark :benchmark}
   :profiles {:uberjar {:aot :all
-                       :dependencies [[org.clojure/clojure "1.7.0-alpha6"]]
+                       :dependencies [[org.clojure/clojure "1.7.0"]]
                        :main riffle.cli}
-             :dev {:dependencies [[org.clojure/clojure "1.7.0-alpha6"]
+             :dev {:dependencies [[org.clojure/clojure "1.7.0"]
                                   [org.clojure/test.check "0.7.0"]
                                   [criterium "0.4.3"]]
                    :main riffle.cli}}
    :codox {:include [riffle.write
                      riffle.read]
-           :output-dir "doc"}
-   :plugins [[codox "0.8.10"]]
+           :output-dir "doc"
+           :defaults {:doc/format :markdown}
+           :src-dir-uri "https://github.com/Factual/riffle/blob/master/"
+           :src-linenum-anchor-prefix "L"}
+   :plugins [[codox "0.8.15"]]
    :jvm-opts ["-server" "-Xmx1g"])
